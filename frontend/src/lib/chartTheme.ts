@@ -6,12 +6,13 @@
 export const SERIES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767'] as const;
 
 export const CHART = {
-  grid: '#232327',
-  axis: '#71717a',
-  tooltipBg: '#18181b',
-  tooltipBorder: '#2e2e33',
-  text: '#ededef',
-  muted: '#a1a1aa',
+  grid: '#2c2040',
+  axis: '#8b7ba1',
+  tooltipBg: '#20152d',
+  tooltipBorder: '#3d2d56',
+  text: '#f1eaf6',
+  muted: '#b6a7c8',
+  bronze: '#d4a35a',
   success: '#199e70',
   danger: '#e66767',
   waste: '#d95926',

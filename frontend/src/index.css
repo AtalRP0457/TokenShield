@@ -3,18 +3,22 @@
 /* Design tokens → Tailwind utilities (bg-surface, text-fg-muted, border-line, …) */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Cinzel', 'Trajan Pro', Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  --color-canvas: #09090b;
-  --color-surface: #111113;
-  --color-surface-2: #17171a;
-  --color-surface-3: #1f1f23;
-  --color-line: #232327;
-  --color-line-strong: #2f2f35;
-  --color-fg: #ededef;
-  --color-fg-muted: #a1a1aa;
-  --color-fg-subtle: #71717a;
-  --color-accent: #3987e5;
+  /* "The wine-dark sea" — Homer's oinops pontos — with Athena's bronze */
+  --color-canvas: #110a18;
+  --color-surface: #180f22;
+  --color-surface-2: #20152d;
+  --color-surface-3: #2a1d3a;
+  --color-line: #2c2040;
+  --color-line-strong: #3d2d56;
+  --color-fg: #f1eaf6;
+  --color-fg-muted: #b6a7c8;
+  --color-fg-subtle: #8b7ba1;
+  --color-accent: #d4a35a;
+  --color-bronze: #d4a35a;
+  --color-bronze-soft: #e8c98e;
 }
 
 @layer base {
@@ -26,14 +30,14 @@
     font-feature-settings: 'cv11', 'ss01';
   }
   ::selection {
-    background: rgb(57 135 229 / 0.35);
+    background: rgb(212 163 90 / 0.35);
   }
 }
 
 /* Thin, unobtrusive scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2f2f35 transparent;
+  scrollbar-color: #3d2d56 transparent;
 }
 
 /* Recharts focus outline off (keyboard focus is shown on our own controls) */
@@ -45,7 +49,7 @@
   from {
     opacity: 0;
     transform: translateY(-4px);
-    background-color: rgb(57 135 229 / 0.08);
+    background-color: rgb(212 163 90 / 0.1);
   }
   to {
     opacity: 1;
@@ -54,4 +58,12 @@
 }
 .animate-feed-in {
   animation: feed-in 0.6s ease-out;
+}
+
+/* Greek key (meander) band, used as a thin bronze ornament under headers */
+.meander {
+  height: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6' viewBox='0 0 12 6'%3E%3Cpath d='M0 5.5h7.5V1.5h-4v2h2' fill='none' stroke='%23d4a35a' stroke-width='1'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  opacity: 0.35;
 }

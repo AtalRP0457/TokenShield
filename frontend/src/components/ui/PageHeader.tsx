@@ -5,15 +5,17 @@ interface PageHeaderProps {
   description?: ReactNode;
   actions?: ReactNode;
   breadcrumb?: ReactNode;
+  /** Cinzel display face for short titles; turn off for long sentence-like titles. */
+  display?: boolean;
 }
 
-export function PageHeader({ title, description, actions, breadcrumb }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, breadcrumb, display = true }: PageHeaderProps) {
   return (
     <div className="mb-6">
       {breadcrumb && <div className="mb-3">{breadcrumb}</div>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-fg">{title}</h1>
+          <h1 className={display ? 'font-display text-2xl font-semibold tracking-wide text-fg' : 'text-xl font-semibold tracking-tight text-fg'}>{title}</h1>
           {description && <p className="mt-1 text-sm text-fg-muted">{description}</p>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

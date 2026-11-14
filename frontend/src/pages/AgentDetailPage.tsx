@@ -6,7 +6,7 @@ import { useApiQuery } from '../hooks/useApiQuery';
 import { useNow } from '../hooks/useNow';
 import { bucketEvents } from '../lib/bucketEvents';
 import { formatCompact, formatDateTime, formatInteger, formatPercent, formatRelative, formatTime, formatUsd, formatUsdAxis } from '../lib/format';
-import { SERIES } from '../lib/chartTheme';
+import { CHART, SERIES } from '../lib/chartTheme';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/States';
@@ -22,7 +22,7 @@ import { ActivityFeed } from '../components/activity/ActivityFeed';
 
 const Back = () => (
   <Link to="/agents" className="inline-flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg">
-    <ArrowLeft className="size-3.5" /> All agents
+    <ArrowLeft className="size-3.5" /> All heroes
   </Link>
 );
 
@@ -93,7 +93,7 @@ export function AgentDetailPage() {
           <CardHeader title="Token consumption" description="From recent events" />
           <CardBody>
             <ChartFrame height={220} loading={events.loading} error={events.error} empty={buckets.length === 0} onRetry={events.refetch}>
-              <TimeSeriesChart data={buckets} xKey="timestamp" height={220} series={[{ key: 'tokens', label: 'Tokens', color: SERIES[0] }]} formatX={formatX} formatY={formatCompact} formatTooltipValue={formatInteger} formatTooltipLabel={formatDateTime} />
+              <TimeSeriesChart data={buckets} xKey="timestamp" height={220} series={[{ key: 'tokens', label: 'Tokens', color: CHART.bronze }]} formatX={formatX} formatY={formatCompact} formatTooltipValue={formatInteger} formatTooltipLabel={formatDateTime} />
             </ChartFrame>
           </CardBody>
         </Card>
@@ -117,7 +117,7 @@ export function AgentDetailPage() {
           {a ? <AgentTaskList tasks={a.current_tasks} /> : <LoadingState className="p-5" rows={3} />}
         </Card>
         <Card className="lg:col-span-2">
-          <CardHeader title="Detected suspicious behaviour" description="Incidents TokenShield raised for this agent" />
+          <CardHeader title="Perils faced" description="Suspicious behaviour TokenShield caught for this agent" />
           {incidents.error ? <ErrorState error={incidents.error} onRetry={incidents.refetch} /> : incidents.loading ? <LoadingState className="p-5" rows={3} /> : <SuspiciousBehavior incidents={agentIncidents} />}
         </Card>
         <Card>

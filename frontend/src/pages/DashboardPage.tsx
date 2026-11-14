@@ -39,7 +39,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Overview" description="Token consumption, spend and risky agent behaviour across your fleet." />
+      <PageHeader title="The watch" description="Athena's view over every agent at sea: token use, spend and the perils they've met." />
 
       {overview.error ? (
         <Card className="mb-6"><ErrorState error={overview.error} onRetry={overview.refetch} title="Could not load overview metrics" /></Card>
@@ -85,7 +85,7 @@ export function DashboardPage() {
       <div className="mt-4 grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-2">
           <CardHeader
-            title="Recent incidents"
+            title="Recent perils"
             actions={<Link to="/incidents" className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg">View all <ArrowRight className="size-3" /></Link>}
           />
           <CardBody>
@@ -100,8 +100,8 @@ export function DashboardPage() {
         </Card>
         <Card className="flex flex-col lg:col-span-3">
           <CardHeader
-            title="Live activity"
-            description="Streaming agent events"
+            title="Ship's log"
+            description="Live agent events as they happen"
             actions={<Link to="/activity" className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg">Open feed <ArrowRight className="size-3" /></Link>}
           />
           <div className="max-h-[380px] flex-1 overflow-y-auto border-t border-line">

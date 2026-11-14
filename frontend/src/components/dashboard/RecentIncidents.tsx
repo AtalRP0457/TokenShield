@@ -4,12 +4,13 @@ import type { Incident } from '../../types/api';
 import { formatRelative, formatUsd } from '../../lib/format';
 import { useNow } from '../../hooks/useNow';
 import { SeverityBadge } from '../incidents/IncidentBadges';
+import { INCIDENT_TYPE } from '../../lib/labels';
 import { EmptyState } from '../ui/States';
 
 export function RecentIncidents({ incidents }: { incidents: Incident[] }) {
   const now = useNow();
   if (incidents.length === 0) {
-    return <EmptyState icon={ShieldCheck} title="No incidents" description="TokenShield hasn't flagged any risky behaviour." />;
+    return <EmptyState icon={ShieldCheck} title="Calm seas" description="TokenShield hasn't caught any risky behaviour." />;
   }
   return (
     <ul className="-mx-2 divide-y divide-line">
@@ -21,7 +22,7 @@ export function RecentIncidents({ incidents }: { incidents: Incident[] }) {
               <div className="mt-1 flex items-center gap-2 text-xs text-fg-subtle">
                 <SeverityBadge severity={inc.severity} />
                 <span className="truncate">
-                  {inc.agent_name} · {formatRelative(inc.detected_at, now)}
+                  <span className="text-bronze">{INCIDENT_TYPE[inc.type]?.peril ?? inc.type}</span> · {inc.agent_name} · {formatRelative(inc.detected_at, now)}
                 </span>
                 <span className="ml-auto shrink-0 font-mono text-orange-300 tabular-nums">{formatUsd(inc.estimated_waste_usd)}</span>
               </div>

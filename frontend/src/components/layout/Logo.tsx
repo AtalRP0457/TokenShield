@@ -1,12 +1,18 @@
-export function Logo() {
+/** Athena's aegis: a bronze shield bearing her owl. */
+export function Logo({ showTagline = false }: { showTagline?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
-      <svg viewBox="0 0 32 32" className="size-7" aria-hidden="true">
-        <rect width="32" height="32" rx="8" fill="#1f1f23" />
-        <path d="M16 5l9 3.5v6.8c0 5.6-3.8 10.2-9 11.7-5.2-1.5-9-6.1-9-11.7V8.5L16 5z" fill="none" stroke="#3987e5" strokeWidth="2.2" strokeLinejoin="round" />
-        <path d="M12 16l3 3 5-6" fill="none" stroke="#ededef" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      <svg viewBox="0 0 32 32" className="size-7 shrink-0" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#2a1d3a" />
+        <path d="M16 4.5l9.5 3.6v7c0 5.9-4 10.7-9.5 12.4C10.5 25.8 6.5 21 6.5 15.1v-7L16 4.5z" fill="none" stroke="#d4a35a" strokeWidth="2.2" strokeLinejoin="round" />
+        <circle cx="13" cy="14" r="2" fill="none" stroke="#f1eaf6" strokeWidth="1.6" />
+        <circle cx="19" cy="14" r="2" fill="none" stroke="#f1eaf6" strokeWidth="1.6" />
+        <path d="M14.8 18.5l1.2 1.6 1.2-1.6" fill="none" stroke="#d4a35a" strokeWidth="1.6" strokeLinejoin="round" />
       </svg>
-      <span className="text-[15px] font-semibold tracking-tight text-fg">TokenShield</span>
+      <div className="leading-none">
+        <span className="font-display text-[15px] font-semibold tracking-wide text-fg">TokenShield</span>
+        {showTagline && <span className="mt-1 block text-[10px] tracking-[0.2em] text-bronze uppercase">Aegis of Athena</span>}
+      </div>
     </div>
   );
 }

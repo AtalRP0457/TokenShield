@@ -6,6 +6,7 @@ import { useApiQuery } from '../hooks/useApiQuery';
 import { useNow } from '../hooks/useNow';
 import type { IncidentStatus } from '../types/api';
 import { formatDateTime, formatRelative, formatUsd } from '../lib/format';
+import { INCIDENT_TYPE } from '../lib/labels';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -19,7 +20,7 @@ import { ActivityFeed } from '../components/activity/ActivityFeed';
 
 const Back = () => (
   <Link to="/incidents" className="inline-flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg">
-    <ArrowLeft className="size-3.5" /> Incident center
+    <ArrowLeft className="size-3.5" /> All perils
   </Link>
 );
 
@@ -68,6 +69,7 @@ export function IncidentDetailPage() {
   return (
     <>
       <PageHeader
+        display={false}
         breadcrumb={<Back />}
         title={i ? i.title : <Skeleton className="h-7 w-80" />}
         description={i && <span className="font-mono text-xs">{i.id}</span>}
@@ -108,11 +110,16 @@ export function IncidentDetailPage() {
                   <span className="text-xs"><IncidentTypeLabel type={i.type} /></span>
                 </div>
                 <p className="text-sm leading-relaxed text-fg-muted">{i.description}</p>
+                {INCIDENT_TYPE[i.type] && (
+                  <p className="mt-4 border-l-2 border-bronze/60 pl-3 font-serif text-sm leading-relaxed text-bronze-soft/90 italic">
+                    <span className="font-semibold not-italic">{INCIDENT_TYPE[i.type].peril}.</span> {INCIDENT_TYPE[i.type].lore}
+                  </p>
+                )}
               </CardBody>
             </Card>
             <GeminiExplanation text={i.gemini_explanation} />
             <Card>
-              <CardHeader title="Recommended actions" />
+              <CardHeader title="Athena's counsel" description="Recommended actions" />
               <CardBody><RecommendedActions actions={i.recommended_actions} /></CardBody>
             </Card>
             <Card>

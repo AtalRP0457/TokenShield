@@ -3,7 +3,7 @@
  * Keeping it here means a new enum value from the backend is a one-line change.
  */
 import {
-  Activity, AlertOctagon, CheckCircle2, Clock, Coins, DollarSign, PlayCircle, Repeat, RotateCw, Wrench, XCircle, Zap,
+  Activity, AlertOctagon, CheckCircle2, CloudLightning, Music, PlayCircle, Repeat, Sun, Tornado, TreePalm, Wind, Wrench, Zap,
   type LucideIcon,
 } from 'lucide-react';
 import type { AgentStatus, EventType, IncidentStatus, IncidentType, Severity, TaskStatus } from '../types/api';
@@ -37,13 +37,36 @@ export const INCIDENT_STATUS: Record<IncidentStatus, { label: string; tone: Tone
   resolved: { label: 'Resolved', tone: 'success' },
 };
 
-export const INCIDENT_TYPE: Record<IncidentType, { label: string; icon: LucideIcon }> = {
-  execution_loop: { label: 'Execution loop', icon: RotateCw },
-  repeated_tool_calls: { label: 'Repeated tool calls', icon: Repeat },
-  consecutive_failures: { label: 'Consecutive failures', icon: XCircle },
-  token_limit_exceeded: { label: 'Token limit exceeded', icon: Coins },
-  cost_limit_exceeded: { label: 'Cost limit exceeded', icon: DollarSign },
-  task_timeout: { label: 'Task timeout', icon: Clock },
+/**
+ * Each incident type is a peril from the Odyssey. `label` is the plain-English
+ * name (always shown alongside, so nobody has to know the myth), `peril` the
+ * mythic name, `lore` one line tying the myth to the failure mode.
+ */
+export const INCIDENT_TYPE: Record<IncidentType, { label: string; peril: string; icon: LucideIcon; lore: string }> = {
+  execution_loop: {
+    label: 'Execution loop', peril: 'Charybdis', icon: Tornado,
+    lore: 'The whirlpool that swallows ships whole: the agent is circling the same step and every turn costs tokens.',
+  },
+  repeated_tool_calls: {
+    label: 'Repeated tool calls', peril: 'The Sirens', icon: Music,
+    lore: 'A song that lures sailors back again and again: the agent keeps calling the same tool with the same arguments.',
+  },
+  consecutive_failures: {
+    label: 'Consecutive failures', peril: "Poseidon's storm", icon: CloudLightning,
+    lore: 'Wave after wave breaks over the ship: one failure after another, with no change of course.',
+  },
+  token_limit_exceeded: {
+    label: 'Token limit exceeded', peril: "Aeolus' winds", icon: Wind,
+    lore: 'The bag of winds opened all at once: a burst of tokens that blows the task far off course.',
+  },
+  cost_limit_exceeded: {
+    label: 'Cost limit exceeded', peril: 'Cattle of Helios', icon: Sun,
+    lore: 'The crew consumed what was forbidden and paid dearly: spend has gone past the budget.',
+  },
+  task_timeout: {
+    label: 'Task timeout', peril: "Calypso's isle", icon: TreePalm,
+    lore: 'Odysseus was held there for seven years: the task is stuck and will not finish on its own.',
+  },
 };
 
 export const EVENT_TYPE: Record<EventType, { label: string; icon: LucideIcon; tone: Tone }> = {

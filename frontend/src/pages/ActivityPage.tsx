@@ -54,8 +54,8 @@ export function ActivityPage() {
   return (
     <>
       <PageHeader
-        title="Live activity"
-        description={`Real-time event stream (${status === 'mock' ? 'mock simulator' : status}). ${perMinute} events in the last minute.`}
+        title="Ship's log"
+        description={`Live activity from every agent (${status === 'mock' ? 'mock simulator' : status}). ${perMinute} events in the last minute.`}
         actions={
           <Button size="sm" variant={paused ? 'primary' : 'secondary'} icon={paused ? Play : Pause} onClick={() => setPaused(!paused)}>
             {paused ? `Resume${bufferedCount ? ` (${bufferedCount} new)` : ''}` : 'Pause'}

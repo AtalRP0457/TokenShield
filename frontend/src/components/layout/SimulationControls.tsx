@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FlaskConical, Play, RotateCw, Square, XCircle, Zap } from 'lucide-react';
+import { ChevronDown, CloudLightning, FlaskConical, Play, Square, Tornado, Wind } from 'lucide-react';
 import { useSimulation } from '../../hooks/useSimulation';
 import type { SimulationScenario } from '../../types/api';
 import { Button } from '../ui/Button';
 
-const SCENARIOS: { id: SimulationScenario; label: string; description: string; icon: typeof Zap }[] = [
-  { id: 'execution_loop', label: 'Execution loop', description: 'Agent repeats the same tool call', icon: RotateCw },
-  { id: 'failure_storm', label: 'Failure storm', description: 'Burst of upstream API failures', icon: XCircle },
-  { id: 'token_spike', label: 'Token spike', description: 'Huge completions in quick succession', icon: Zap },
+const SCENARIOS: { id: SimulationScenario; label: string; description: string; icon: typeof Wind }[] = [
+  { id: 'execution_loop', label: 'Summon Charybdis', description: 'Execution loop: same tool call, again and again', icon: Tornado },
+  { id: 'failure_storm', label: "Raise Poseidon's storm", description: 'Failure storm: burst of upstream API errors', icon: CloudLightning },
+  { id: 'token_spike', label: "Open Aeolus' bag", description: 'Token spike: huge completions back to back', icon: Wind },
 ];
 
 /** Demo controls → POST /api/simulation/start | stop | trigger. */
@@ -59,7 +59,7 @@ export function SimulationControls() {
             </div>
           </div>
           <div className="p-1.5">
-            <p className="px-2 pt-1 pb-1.5 text-[11px] font-medium tracking-wide text-fg-subtle uppercase">Inject incident</p>
+            <p className="px-2 pt-1 pb-1.5 text-[11px] font-medium tracking-wide text-fg-subtle uppercase">Unleash a peril</p>
             {SCENARIOS.map(({ id, label, description, icon: Icon }) => (
               <button
                 key={id}
@@ -72,7 +72,7 @@ export function SimulationControls() {
                 }}
                 className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-3 disabled:opacity-50"
               >
-                <Icon className="mt-0.5 size-4 shrink-0 text-fg-muted" />
+                <Icon className="mt-0.5 size-4 shrink-0 text-bronze" />
                 <span>
                   <span className="block text-xs font-medium text-fg">{label}</span>
                   <span className="block text-[11px] text-fg-subtle">{description}</span>

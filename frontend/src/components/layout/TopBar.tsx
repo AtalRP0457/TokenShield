@@ -16,6 +16,7 @@ export function TopBar({ onOpenNav }: { onOpenNav: () => void }) {
         <ConnectionIndicator />
         <SimulationControls />
       </div>
+      <div className="meander pointer-events-none absolute inset-x-0 -bottom-[3px]" />
     </header>
   );
 }

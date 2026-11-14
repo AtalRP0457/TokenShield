@@ -31,14 +31,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         )}
       >
         <div className="flex h-14 items-center justify-between px-4">
-          <Logo />
+          <Logo showTagline />
           <button type="button" onClick={onClose} className="rounded-md p-1 text-fg-subtle hover:text-fg lg:hidden" aria-label="Close navigation">
             <X className="size-4" />
           </button>
         </div>
 
         <nav className="flex-1 space-y-0.5 px-2 py-3" aria-label="Main">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+          {NAV_ITEMS.map(({ to, label, hint, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -52,7 +52,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               }
             >
               <Icon className="size-4 shrink-0" />
-              <span className="flex-1">{label}</span>
+              <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                <span className="truncate">{label}</span>
+                <span className="truncate text-[11px] text-fg-subtle">{hint}</span>
+              </span>
               {to === '/incidents' && openIncidents > 0 && (
                 <span className="rounded-full bg-red-500/15 px-1.5 py-px font-mono text-[11px] text-red-300">{openIncidents}</span>
               )}
@@ -61,6 +64,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </nav>
 
         <div className="border-t border-line p-4 text-xs text-fg-subtle">
+          <p className="mb-3 font-serif text-xs leading-relaxed text-bronze/80 italic">“Tell me, O Muse, of that ingenious hero who travelled far and wide.”</p>
           <p className="font-medium text-fg-muted">{config.useMock ? 'Mock mode' : 'Connected API'}</p>
           <p className="mt-0.5 truncate font-mono" title={config.useMock ? 'In-browser mock data' : config.apiBaseUrl}>
             {config.useMock ? 'in-browser data' : config.apiBaseUrl}

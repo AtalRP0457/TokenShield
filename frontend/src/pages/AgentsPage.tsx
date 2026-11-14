@@ -43,8 +43,8 @@ export function AgentsPage() {
   return (
     <>
       <PageHeader
-        title="Agents"
-        description="Every agent registered with TokenShield. Select one for detailed monitoring."
+        title="Heroes"
+        description="Every agent sailing under the aegis. Select one to follow its voyage."
         actions={<Button size="sm" icon={RefreshCw} loading={agents.fetching && !agents.loading} onClick={() => void agents.refetch()}>Refresh</Button>}
       />
       <Card>

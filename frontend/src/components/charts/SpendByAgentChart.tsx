@@ -1,6 +1,6 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { AgentMetric } from '../../types/api';
-import { CHART, SERIES } from '../../lib/chartTheme';
+import { CHART } from '../../lib/chartTheme';
 import { formatUsd, formatUsdAxis } from '../../lib/format';
 import { ChartTooltip } from './ChartTooltip';
 
@@ -14,7 +14,7 @@ export function SpendByAgentChart({ data, height = 260 }: { data: AgentMetric[];
         <XAxis type="number" tickFormatter={formatUsdAxis} stroke={CHART.axis} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
         <YAxis type="category" dataKey="agent_name" width={140} stroke={CHART.axis} tick={{ fontSize: 11, fill: CHART.muted }} tickLine={false} axisLine={false} />
         <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<ChartTooltip valueFormatter={formatUsd} />} />
-        <Bar dataKey="total_cost_usd" name="Spend" fill={SERIES[0]} radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false} />
+        <Bar dataKey="total_cost_usd" name="Spend" fill={CHART.bronze} radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
   );

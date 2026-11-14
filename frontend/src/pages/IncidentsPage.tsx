@@ -62,8 +62,8 @@ export function IncidentsPage() {
   return (
     <>
       <PageHeader
-        title="Incident center"
-        description="Loops, failure storms and budget overruns detected by TokenShield."
+        title="Perils of the voyage"
+        description="Incident center · loops, failure storms and budget overruns TokenShield caught."
         actions={
           incidents.data && (
             <div className="flex gap-6 text-right">
@@ -91,8 +91,8 @@ export function IncidentsPage() {
             options={[{ value: 'unresolved', label: 'Unresolved' }, { value: 'all', label: 'All statuses' }, ...Object.entries(INCIDENT_STATUS).map(([value, m]) => ({ value, label: m.label }))]} />
           <Select aria-label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)} className="md:w-36"
             options={[{ value: 'all', label: 'All severities' }, ...Object.entries(SEVERITY).map(([value, m]) => ({ value, label: m.label }))]} />
-          <Select aria-label="Type" value={type} onChange={(e) => setType(e.target.value as typeof type)} className="col-span-2 md:w-48"
-            options={[{ value: 'all', label: 'All types' }, ...Object.entries(INCIDENT_TYPE).map(([value, m]) => ({ value, label: m.label }))]} />
+          <Select aria-label="Type" value={type} onChange={(e) => setType(e.target.value as typeof type)} className="col-span-2 md:w-60"
+            options={[{ value: 'all', label: 'All types' }, ...Object.entries(INCIDENT_TYPE).map(([value, m]) => ({ value, label: `${m.peril} · ${m.label}` }))]} />
           {incidents.data && <p className="col-span-2 whitespace-nowrap text-xs text-fg-subtle md:ml-auto">{visible.length} shown</p>}
         </div>
 
@@ -103,7 +103,7 @@ export function IncidentsPage() {
         ) : visible.length === 0 ? (
           <EmptyState
             icon={ShieldCheck}
-            title={all.length === 0 ? 'No incidents detected' : 'No incidents match these filters'}
+            title={all.length === 0 ? 'Calm seas · no incidents' : 'No incidents match these filters'}
             description={all.length === 0 ? 'Your agents are behaving. Incidents appear here when TokenShield detects risky behaviour.' : status === 'unresolved' ? 'Everything is resolved. Show all statuses to see history.' : undefined}
             action={all.length > 0 && <Button size="sm" onClick={resetFilters}>Show all incidents</Button>}
           />

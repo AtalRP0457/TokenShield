@@ -57,7 +57,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Token protection" description="Guardrails that stop runaway agents before they burn budget." />
+      <PageHeader title="Athena's wards" description="Token protection: guardrails that stop runaway agents before they burn budget." />
 
       <div className="mb-4 flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-sm">
         <Info className="mt-0.5 size-4 shrink-0 text-amber-300" />
