@@ -97,7 +97,7 @@ export const AGENT_PROFILES: AgentProfile[] = [
 export const profileById = (id: string) => AGENT_PROFILES.find((p) => p.id === id)!;
 
 export function seedAgents(): Agent[] {
-  const base: Omit<Agent, 'last_seen_at'>[] = [
+  const base: Omit<Agent, 'last_seen_at' | 'paused_by' | 'pause_reason'>[] = [
     {
       id: 'agt_research', name: 'Research Assistant', model: 'gemini-2.5-pro', status: 'active',
       description: 'Multi-step web research and report synthesis for the strategy team.',
@@ -145,6 +145,8 @@ export function seedAgents(): Agent[] {
     total_tokens: a.total_tokens * 8,
     total_cost_usd: +(a.total_cost_usd * 8).toFixed(2),
     last_seen_at: iso(now - lastSeenOffset[a.id]),
+    paused_by: a.status === 'paused' ? ('user' as const) : null,
+    pause_reason: a.status === 'paused' ? 'Paused by operator while the supplier site is rate limiting' : null,
   }));
 }
 
@@ -240,6 +242,9 @@ export function buildEvent(
         message: `Completed task “${task}”`,
       };
     }
+    case 'agent_stopped':
+    case 'agent_resumed':
+      return { ...base, type, message: type === 'agent_stopped' ? 'Agent stopped' : 'Agent resumed' };
   }
 }
 
@@ -305,6 +310,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
         'Add a max-iterations guard to the review loop.',
       ],
       related_event_ids: idsFor('agt_codereview', 6),
+      agent_stopped: false,
     },
     {
       id: 'inc_1041', agent_id: 'agt_codereview', agent_name: 'Code Review Agent',
@@ -320,6 +326,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
         'Use git_diff with context lines limited to 20.',
       ],
       related_event_ids: idsFor('agt_codereview', 4),
+      agent_stopped: false,
     },
     {
       id: 'inc_1040', agent_id: 'agt_research', agent_name: 'Research Assistant',
@@ -334,6 +341,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
         'Limit repeated tool calls with similar arguments to 5 per task.',
       ],
       related_event_ids: idsFor('agt_research', 5),
+      agent_stopped: false,
     },
     {
       id: 'inc_1039', agent_id: 'agt_scraper', agent_name: 'Web Scraper',
@@ -349,6 +357,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
         'Respect the Retry-After header.',
       ],
       related_event_ids: idsFor('agt_scraper', 5),
+      agent_stopped: false,
     },
     {
       id: 'inc_1038', agent_id: 'agt_support', agent_name: 'Customer Support Bot',
@@ -360,6 +369,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
         'Long email threads were summarised message-by-message. Batching the thread into one summarisation call resolves the slowdown.',
       recommended_actions: ['Summarise long threads in a single batched call.'],
       related_event_ids: idsFor('agt_support', 3),
+      agent_stopped: false,
     },
     {
       id: 'inc_1037', agent_id: 'agt_codereview', agent_name: 'Code Review Agent',
@@ -371,6 +381,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
         'Spend was driven by an execution loop on PR #1279 that went undetected for 40 minutes.',
       recommended_actions: ['Enable automatic pause when the daily budget is reached.'],
       related_event_ids: idsFor('agt_codereview', 3),
+      agent_stopped: false,
     },
     {
       id: 'inc_1036', agent_id: 'agt_pipeline', agent_name: 'Data Pipeline Agent',
@@ -381,6 +392,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
       gemini_explanation: null,
       recommended_actions: ['Update the expected schema to include the new column.'],
       related_event_ids: idsFor('agt_pipeline', 3),
+      agent_stopped: false,
     },
     {
       id: 'inc_1035', agent_id: 'agt_codereview', agent_name: 'Code Review Agent',
@@ -392,6 +404,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
         'A lint check flagged each new comment as a duplicate, which the agent interpreted as a failure and retried.',
       recommended_actions: ['Treat duplicate-comment responses as success.'],
       related_event_ids: idsFor('agt_codereview', 3),
+      agent_stopped: false,
     },
   ];
 }

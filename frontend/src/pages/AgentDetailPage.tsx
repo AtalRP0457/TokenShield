@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/ui/States';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Stat } from '../components/ui/Stat';
 import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
+import { AgentControls, PausedBanner } from '../components/agents/AgentControls';
 import { AgentTaskList } from '../components/agents/AgentTaskList';
 import { ToolCallTable } from '../components/agents/ToolCallTable';
 import { SuspiciousBehavior } from '../components/agents/SuspiciousBehavior';
@@ -63,9 +64,25 @@ export function AgentDetailPage() {
     <>
       <PageHeader
         breadcrumb={<Back />}
-        title={a ? <span className="flex flex-wrap items-center gap-3">{a.name}<AgentStatusBadge status={a.status} /></span> : <Skeleton className="h-7 w-56" />}
+        title={a ? <span className="flex flex-wrap items-center gap-3">{a.name}<AgentStatusBadge status={a.status} pausedBy={a.paused_by} /></span> : <Skeleton className="h-7 w-56" />}
         description={a?.description}
+        actions={
+          a && (
+            <AgentControls
+              agent={a}
+              pause={(reason) => api.pauseAgent(a.id, { reason })}
+              resume={() => api.resumeAgent(a.id)}
+              onChange={(updated) => {
+                agent.setData((prev) => (prev ? { ...prev, ...updated } : prev));
+                void agent.refetch();
+                void events.refetch();
+              }}
+            />
+          )
+        }
       />
+
+      {a && <PausedBanner agent={a} />}
 
       {/* Agent information */}
       <Card className="mb-4">

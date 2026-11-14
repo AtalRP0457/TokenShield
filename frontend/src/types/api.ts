@@ -22,7 +22,9 @@ export type EventType =
   | 'token_usage'
   | 'repeated_call'
   | 'task_started'
-  | 'task_completed';
+  | 'task_completed'
+  | 'agent_stopped'
+  | 'agent_resumed';
 
 export type IncidentType =
   | 'execution_loop'
@@ -37,6 +39,12 @@ export type Severity = 'low' | 'medium' | 'high' | 'critical';
 export type IncidentStatus = 'open' | 'investigating' | 'resolved';
 
 export type TaskStatus = 'running' | 'completed' | 'failed' | 'stopped';
+
+/** Who paused an agent: a person from the dashboard, or TokenShield enforcing a limit. */
+export type PausedBy = 'user' | 'tokenshield';
+
+/** What TokenShield tells an agent after it reports an event. */
+export type AgentAction = 'continue' | 'stop';
 
 /* ------------------------------------------------------------------ */
 /* Agents                                                              */
@@ -56,6 +64,9 @@ export interface Agent {
   tool_calls: number;
   failed_tool_calls: number;
   incident_count: number;
+  /** Set while status is 'paused'. */
+  paused_by: PausedBy | null;
+  pause_reason: string | null;
 }
 
 export interface AgentTask {
@@ -106,6 +117,21 @@ export interface AgentEvent {
 
 /** POST /api/events  (body) — what agents/SDKs send in. Not used by the UI directly. */
 export type IngestEventRequest = Omit<AgentEvent, 'id' | 'agent_name'>;
+
+/**
+ * POST /api/events  (response). This is how TokenShield stops an agent:
+ * agents check `action` after every event and end their task on 'stop'.
+ */
+export interface IngestEventResponse {
+  event: AgentEvent;
+  action: AgentAction;
+  reason: string | null;
+}
+
+/** POST /api/agents/{agent_id}/pause  (body) → Agent.  POST /api/agents/{agent_id}/resume → Agent. */
+export interface PauseAgentRequest {
+  reason?: string;
+}
 
 /* ------------------------------------------------------------------ */
 /* Metrics                                                             */
@@ -170,6 +196,8 @@ export interface Incident {
   recommended_actions: string[];
   /** IDs of the events that triggered this incident. */
   related_event_ids: string[];
+  /** True when TokenShield stopped the agent automatically for this incident. */
+  agent_stopped: boolean;
 }
 
 /** PATCH /api/incidents/{id}  (body) */

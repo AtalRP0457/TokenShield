@@ -7,6 +7,8 @@ import type {
   HealthResponse,
   Incident,
   IngestEventRequest,
+  IngestEventResponse,
+  PauseAgentRequest,
   MetricsOverview,
   RegisterAgentRequest,
   SimulationStatus,
@@ -22,10 +24,12 @@ import type {
  */
 export interface TokenShieldApi {
   registerAgent(body: RegisterAgentRequest): Promise<Agent>;
-  ingestEvent(body: IngestEventRequest): Promise<AgentEvent>;
+  ingestEvent(body: IngestEventRequest): Promise<IngestEventResponse>;
   getAgents(): Promise<Agent[]>;
   getAgent(agentId: string): Promise<AgentDetail>;
   getAgentEvents(agentId: string): Promise<AgentEvent[]>;
+  pauseAgent(agentId: string, body: PauseAgentRequest): Promise<Agent>;
+  resumeAgent(agentId: string): Promise<Agent>;
   getOverview(): Promise<MetricsOverview>;
   getTokenMetrics(): Promise<TokenMetricPoint[]>;
   getCostMetrics(): Promise<CostMetricPoint[]>;

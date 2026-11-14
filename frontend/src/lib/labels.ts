@@ -3,7 +3,7 @@
  * Keeping it here means a new enum value from the backend is a one-line change.
  */
 import {
-  Activity, AlertOctagon, CheckCircle2, CloudLightning, Music, PlayCircle, Repeat, Sun, Tornado, TreePalm, Wind, Wrench, Zap,
+  Activity, AlertOctagon, CheckCircle2, CloudLightning, Music, PlayCircle, Repeat, ShieldCheck, ShieldX, Sun, Tornado, TreePalm, Wind, Wrench, Zap,
   type LucideIcon,
 } from 'lucide-react';
 import type { AgentStatus, EventType, IncidentStatus, IncidentType, Severity, TaskStatus } from '../types/api';
@@ -76,6 +76,8 @@ export const EVENT_TYPE: Record<EventType, { label: string; icon: LucideIcon; to
   repeated_call: { label: 'Repeated call', icon: Repeat, tone: 'warning' },
   task_started: { label: 'Task started', icon: PlayCircle, tone: 'neutral' },
   task_completed: { label: 'Task completed', icon: CheckCircle2, tone: 'success' },
+  agent_stopped: { label: 'Agent stopped', icon: ShieldX, tone: 'critical' },
+  agent_resumed: { label: 'Agent resumed', icon: ShieldCheck, tone: 'success' },
 };
 
 export const FALLBACK_EVENT = { label: 'Event', icon: Activity, tone: 'neutral' as Tone };

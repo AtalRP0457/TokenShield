@@ -1,7 +1,14 @@
-/** Athena's aegis: a bronze shield bearing her owl. */
-export function Logo({ showTagline = false }: { showTagline?: boolean }) {
+import { Link } from 'react-router-dom';
+
+/** Athena's aegis: a bronze shield bearing her owl. Links back to The watch (overview). */
+export function Logo({ showTagline = false, onClick }: { showTagline?: boolean; onClick?: () => void }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <Link
+      to="/"
+      onClick={onClick}
+      aria-label="TokenShield: go to The watch"
+      className="flex items-center gap-2.5 rounded-lg transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+    >
       <svg viewBox="0 0 32 32" className="size-7 shrink-0" aria-hidden="true">
         <rect width="32" height="32" rx="8" fill="#2a1d3a" />
         <path d="M16 4.5l9.5 3.6v7c0 5.9-4 10.7-9.5 12.4C10.5 25.8 6.5 21 6.5 15.1v-7L16 4.5z" fill="none" stroke="#d4a35a" strokeWidth="2.2" strokeLinejoin="round" />
@@ -13,6 +20,6 @@ export function Logo({ showTagline = false }: { showTagline?: boolean }) {
         <span className="font-display text-[15px] font-semibold tracking-wide text-fg">TokenShield</span>
         {showTagline && <span className="mt-1 block text-[10px] tracking-[0.2em] text-bronze uppercase">Aegis of Athena</span>}
       </div>
-    </div>
+    </Link>
   );
 }

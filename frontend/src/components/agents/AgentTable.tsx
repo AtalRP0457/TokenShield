@@ -65,7 +65,7 @@ export function AgentTable({ agents, sortKey, sortDir, onSort }: AgentTableProps
                     <span className="font-mono">{a.model}</span> · seen {formatRelative(a.last_seen_at, now)}
                   </p>
                 </td>
-                <td className="px-5 py-3"><AgentStatusBadge status={a.status} /></td>
+                <td className="px-5 py-3"><AgentStatusBadge status={a.status} pausedBy={a.paused_by} /></td>
                 <td className="px-5 py-3 text-right font-mono tabular-nums" title={formatInteger(a.total_tokens)}>{formatCompact(a.total_tokens)}</td>
                 <td className="px-5 py-3 text-right font-mono tabular-nums">{formatUsd(a.total_cost_usd)}</td>
                 <td className="px-5 py-3 text-right font-mono tabular-nums">
@@ -86,7 +86,7 @@ export function AgentTable({ agents, sortKey, sortDir, onSort }: AgentTableProps
             <Link to={`/agents/${a.id}`} className="block px-4 py-3.5 hover:bg-surface-2">
               <div className="flex items-center justify-between gap-3">
                 <span className="truncate font-medium text-fg">{a.name}</span>
-                <AgentStatusBadge status={a.status} />
+                <AgentStatusBadge status={a.status} pausedBy={a.paused_by} />
               </div>
               <dl className="mt-2.5 grid grid-cols-4 gap-2 text-xs">
                 {[

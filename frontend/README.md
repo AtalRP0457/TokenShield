@@ -62,6 +62,9 @@ src/
 | `GET /api/agents` | `Agent[]` |
 | `GET /api/agents/{id}` | `AgentDetail` (Agent + `current_tasks`) |
 | `GET /api/agents/{id}/events` | `AgentEvent[]` |
+| `POST /api/agents/{id}/pause` | body `{ reason? }` → `Agent` (status `paused`, `paused_by: "user"`) |
+| `POST /api/agents/{id}/resume` | → `Agent` (status back to `active`) |
+| `POST /api/events` | → `{ event, action: "continue" \| "stop", reason }` |
 | `GET /api/metrics/overview` | `MetricsOverview` |
 | `GET /api/metrics/tokens` | `TokenMetricPoint[]` (hourly, oldest first) |
 | `GET /api/metrics/cost` | `CostMetricPoint[]` (hourly, oldest first) |
@@ -77,3 +80,23 @@ Gaps worth raising with the backend:
 - **No global events endpoint** — polling fetches `/api/agents/{id}/events` per agent. A `GET /api/events?limit=` would be cheaper.
 - **No settings endpoint** — protection limits are stored in the browser and labelled "Saved in browser only". When the backend enforces a limit, add its key to `BACKEND_ENFORCED_SETTINGS` in `services/settingsStorage.ts`.
 - **No simulation status endpoint** — in real mode the UI shows Start *and* Stop until the first response tells it the state.
+
+## How TokenShield stops an agent
+
+TokenShield can't kill another program, so agents cooperate: after every `POST /api/events` the agent reads `action` and ends its task on `"stop"`.
+
+```python
+resp = requests.post(f"{API}/api/events", json=event).json()
+if resp["action"] == "stop":
+    print("TokenShield stopped me:", resp["reason"])
+    return  # end the task
+```
+
+The backend answers `"stop"` when:
+
+- the agent is paused (from the dashboard's **Pause agent** button, or by an earlier violation), or
+- the event breaks a protection limit: same call repeated ≥ max repeated tool calls (Charybdis), failures in a row ≥ max consecutive failures (Poseidon's storm), or a task's tokens > max tokens per task (Aeolus' winds).
+
+On a violation it also creates an incident with `agent_stopped: true` and sets the agent to `status: "paused"`, `paused_by: "tokenshield"`, `pause_reason: "<why>"`.
+
+`enforce()` in `src/services/mock/mockApi.ts` implements exactly these rules. Use it as the reference for the FastAPI version.

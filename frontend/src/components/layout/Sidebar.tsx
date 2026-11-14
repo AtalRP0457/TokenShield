@@ -31,7 +31,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         )}
       >
         <div className="flex h-14 items-center justify-between px-4">
-          <Logo showTagline />
+          <Logo showTagline onClick={onClose} />
           <button type="button" onClick={onClose} className="rounded-md p-1 text-fg-subtle hover:text-fg lg:hidden" aria-label="Close navigation">
             <X className="size-4" />
           </button>

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Info, RotateCcw, Save, ServerCog, HardDrive } from 'lucide-react';
+import { CheckCircle2, Info, RotateCcw, Save, ServerCog, HardDrive, ShieldCheck } from 'lucide-react';
 import type { ProtectionSettingKey, ProtectionSettings } from '../types/settings';
-import { BACKEND_ENFORCED_SETTINGS, DEFAULT_SETTINGS, loadSettings, saveSettings } from '../services/settingsStorage';
+import { DEFAULT_SETTINGS, enforcementFor, loadSettings, saveSettings } from '../services/settingsStorage';
+import { config } from '../services';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -62,11 +63,23 @@ export function SettingsPage() {
       <div className="mb-4 flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-sm">
         <Info className="mt-0.5 size-4 shrink-0 text-amber-300" />
         <div className="text-fg-muted">
-          <p className="font-medium text-amber-200">Configured here, not yet enforced by the backend</p>
-          <p className="mt-1">
-            The TokenShield API doesn’t expose a settings endpoint yet, so these limits are saved in your browser only.
-            Each limit shows its enforcement status; it will switch to <span className="text-fg">Enforced by backend</span> once the API supports it.
-          </p>
+          {config.useMock ? (
+            <>
+              <p className="font-medium text-amber-200">Mock mode: limits are enforced by the in-browser simulator</p>
+              <p className="mt-1">
+                When an agent breaks a limit marked <span className="text-fg">Enforced (mock)</span>, TokenShield raises an incident and stops the agent.
+                The real backend doesn’t have a settings endpoint yet, so these values are saved in your browser.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium text-amber-200">Configured here, not yet enforced by the backend</p>
+              <p className="mt-1">
+                The TokenShield API doesn’t expose a settings endpoint yet, so these limits are saved in your browser only.
+                Each limit shows its enforcement status; it will switch to <span className="text-fg">Enforced by backend</span> once the API supports it.
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -79,7 +92,7 @@ export function SettingsPage() {
         >
           <ul className="divide-y divide-line">
             {FIELDS.map((f) => {
-              const enforced = BACKEND_ENFORCED_SETTINGS.has(f.key);
+              const enforced = enforcementFor(f.key);
               const changed = Number(draft[f.key]) !== saved[f.key];
               const err = errors[f.key];
               return (
@@ -87,8 +100,10 @@ export function SettingsPage() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <label htmlFor={f.key} className="text-sm font-medium text-fg">{f.label}</label>
-                      {enforced ? (
+                      {enforced === 'backend' ? (
                         <Badge tone="success"><ServerCog className="size-3" /> Enforced by backend</Badge>
+                      ) : enforced === 'mock' ? (
+                        <Badge tone="info"><ShieldCheck className="size-3" /> Enforced (mock)</Badge>
                       ) : (
                         <Badge tone="warning"><HardDrive className="size-3" /> Saved in browser only</Badge>
                       )}

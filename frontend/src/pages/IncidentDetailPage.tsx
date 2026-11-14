@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, RotateCcw, Search, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, RotateCcw, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { api, ApiError } from '../services';
 import { useApiQuery } from '../hooks/useApiQuery';
 import { useNow } from '../hooks/useNow';
@@ -96,6 +96,16 @@ export function IncidentDetailPage() {
       />
 
       {actionError && <div role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-200">Update failed: {actionError}</div>}
+
+      {i?.agent_stopped && (
+        <div role="status" className="mb-4 flex gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-4 text-sm">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-300" />
+          <p className="text-fg-muted">
+            <span className="font-medium text-emerald-200">TokenShield stopped {i.agent_name} automatically</span> when it broke a protection limit, so the waste stopped at {formatUsd(i.estimated_waste_usd)}.{' '}
+            <Link to={`/agents/${i.agent_id}`} className="text-accent hover:underline">Review and resume the agent</Link>
+          </p>
+        </div>
+      )}
 
       {!i ? (
         <Card><LoadingState rows={5} className="p-5" /></Card>

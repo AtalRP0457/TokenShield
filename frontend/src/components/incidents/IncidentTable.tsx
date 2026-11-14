@@ -57,6 +57,7 @@ export function IncidentTable({ incidents, onResolve, resolvingId }: IncidentTab
                     {i.id}
                   </Link>
                   <p className="mt-0.5 truncate text-fg">{i.title}</p>
+                  {i.agent_stopped && <p className="mt-0.5 text-xs text-emerald-300">Agent stopped automatically</p>}
                 </td>
                 <td className="px-3 py-3">
                   <Link to={`/agents/${i.agent_id}`} onClick={(e) => e.stopPropagation()} className="text-fg-muted hover:text-fg hover:underline">
@@ -83,6 +84,7 @@ export function IncidentTable({ incidents, onResolve, resolvingId }: IncidentTab
                 <SeverityBadge severity={i.severity} />
                 <IncidentStatusBadge status={i.status} />
                 <span className="hidden text-xs sm:inline"><IncidentTypeLabel type={i.type} /></span>
+                {i.agent_stopped && <span className="text-xs text-emerald-300">· agent stopped</span>}
                 <span className="ml-auto font-mono text-xs text-orange-300 tabular-nums">{formatUsd(i.estimated_waste_usd)}</span>
               </div>
               <p className="mt-2 text-sm text-fg">{i.title}</p>

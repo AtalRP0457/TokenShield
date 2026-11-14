@@ -14,7 +14,7 @@ export function Badge({ tone = 'neutral', dot, pulse, children, className }: Bad
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 font-sans text-xs font-medium tracking-normal normal-case ring-1 ring-inset',
         TONE_CLASSES[tone],
         className,
       )}

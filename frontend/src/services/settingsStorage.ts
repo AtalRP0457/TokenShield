@@ -1,4 +1,5 @@
 import type { ProtectionSettingKey, ProtectionSettings } from '../types/settings';
+import { config } from './config';
 
 const STORAGE_KEY = 'tokenshield.protection-settings.v1';
 
@@ -17,6 +18,21 @@ export const DEFAULT_SETTINGS: ProtectionSettings = {
  * enforces it (and add the matching endpoint to the API layer).
  */
 export const BACKEND_ENFORCED_SETTINGS: ReadonlySet<ProtectionSettingKey> = new Set<ProtectionSettingKey>();
+
+/** Limits the in-browser mock backend enforces (see enforce() in mock/mockApi.ts). */
+export const MOCK_ENFORCED_SETTINGS: ReadonlySet<ProtectionSettingKey> = new Set<ProtectionSettingKey>([
+  'maxTokensPerTask',
+  'maxConsecutiveFailures',
+  'maxRepeatedToolCalls',
+]);
+
+export type Enforcement = 'backend' | 'mock' | 'none';
+
+/** Who actually enforces a limit in the current mode. */
+export function enforcementFor(key: ProtectionSettingKey): Enforcement {
+  if (config.useMock) return MOCK_ENFORCED_SETTINGS.has(key) ? 'mock' : 'none';
+  return BACKEND_ENFORCED_SETTINGS.has(key) ? 'backend' : 'none';
+}
 
 export function loadSettings(): ProtectionSettings {
   try {
