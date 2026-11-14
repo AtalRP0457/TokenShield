@@ -1,0 +1,57 @@
+@import 'tailwindcss';
+
+/* Design tokens → Tailwind utilities (bg-surface, text-fg-muted, border-line, …) */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-canvas: #09090b;
+  --color-surface: #111113;
+  --color-surface-2: #17171a;
+  --color-surface-3: #1f1f23;
+  --color-line: #232327;
+  --color-line-strong: #2f2f35;
+  --color-fg: #ededef;
+  --color-fg-muted: #a1a1aa;
+  --color-fg-subtle: #71717a;
+  --color-accent: #3987e5;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-canvas font-sans text-fg antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  ::selection {
+    background: rgb(57 135 229 / 0.35);
+  }
+}
+
+/* Thin, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2f2f35 transparent;
+}
+
+/* Recharts focus outline off (keyboard focus is shown on our own controls) */
+.recharts-wrapper *:focus {
+  outline: none;
+}
+
+@keyframes feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+    background-color: rgb(57 135 229 / 0.08);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-feed-in {
+  animation: feed-in 0.6s ease-out;
+}
