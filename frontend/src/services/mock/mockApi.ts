@@ -15,6 +15,7 @@ import type { TokenShieldApi } from '../apiClient';
 import { ApiError } from '../http';
 import { loadSettings } from '../settingsStorage';
 import { plainFor, plainSentence } from '../../lib/plain';
+import { demoGemini } from '../demoGemini';
 import type { ProtectionSettings } from '../../types/settings';
 import type * as V2 from '../../types/api';
 import type {
@@ -56,6 +57,58 @@ let incidentSeq = 1043;
 const evidenceById: Record<string, Record<string, unknown>> = {};
 /** When each incident's Gemini analysis becomes available. */
 const analysisReadyAt: Record<string, number> = {};
+
+/* ---------------- live Gemini (via the Vercel server function) ---------------- */
+
+/** Live Gemini readings, by incident id. Replace the pre-written sample text when present. */
+const geminiById: Record<string, V2.GeminiAnalysis> = {};
+const geminiPending = new Set<string>();
+/** Free-tier friendly: at most this many automatic readings per visit (Re-run always asks). */
+let autoAnalysesLeft = 8;
+
+function incidentPayload(i: Incident) {
+  return {
+    agent_name: i.agent_name, incident_type: INCIDENT_TYPE_V2[i.type], rule_severity: i.severity,
+    description: i.description, evidence: evidenceFor(i), estimated_waste_usd_estimate: +i.estimated_waste_usd.toFixed(4),
+  };
+}
+
+async function requestAnalysis(i: Incident, manual = false): Promise<boolean> {
+  if (geminiPending.has(i.id)) return false;
+  if (!manual) {
+    if (autoAnalysesLeft <= 0) return false;
+    autoAnalysesLeft -= 1;
+  }
+  geminiPending.add(i.id);
+  try {
+    const r = await demoGemini<V2.GeminiAnalysis & { model?: string }>({ kind: 'analyze', incident: incidentPayload(i) });
+    if (r && r.summary) {
+      const { model: _model, ...analysis } = r;
+      void _model;
+      geminiById[i.id] = { ...analysis, is_sample: false };
+      return true;
+    }
+    return false;
+  } finally {
+    geminiPending.delete(i.id);
+  }
+}
+
+function oracleContext(agentId?: string) {
+  const pool = agentId ? agents.filter((a) => a.id === agentId) : agents;
+  return {
+    agents: [...pool].sort((a, b) => b.total_cost_usd - a.total_cost_usd).map((a) => ({
+      name: a.name, status: a.status === 'paused' ? 'paused' : 'active', tokens: a.total_tokens,
+      estimated_cost_usd: +a.total_cost_usd.toFixed(2), open_problems: incidents.filter((i) => i.agent_id === a.id && i.status !== 'resolved').length,
+    })),
+    recent_problems: incidents.filter((i) => !agentId || i.agent_id === agentId).slice(0, 10).map((i) => ({
+      agent: i.agent_name, problem: INCIDENT_TYPE_V2[i.type], severity: i.severity, status: i.status,
+      what_happened: i.description, estimated_waste_usd: +i.estimated_waste_usd.toFixed(2),
+    })),
+    caught_waste_usd: +incidents.reduce((s, i) => s + i.estimated_waste_usd, 0).toFixed(2),
+    note: 'TokenShield estimates it saved about 5x the caught waste by pausing loops early.',
+  };
+}
 
 /** Heroes added from the dashboard: they only move when you send events (no simulator profile). */
 const userAgentIds = new Set<string>();
@@ -206,9 +259,13 @@ function toIncidentV2(i: Incident): V2.Incident {
     evidence,
     repeated_calls: type === 'REPEATED_TOOL_CALL' || type === 'SEQUENCE_LOOP' ? Number(evidence.repeated_calls ?? i.related_event_ids.length) : null,
     estimated_waste: +i.estimated_waste_usd.toFixed(4),
-    gemini_analysis:
-      ready && i.gemini_explanation
+    gemini_analysis: geminiById[i.id]
+      ? geminiById[i.id]
+      : geminiPending.has(i.id)
+      ? null
+      : ready && i.gemini_explanation
         ? {
+            is_sample: true,
             summary: i.title,
             probable_root_cause: i.gemini_explanation,
             severity: i.severity,
@@ -279,6 +336,7 @@ function openIncident(
   agent.incident_count += 1;
   evidenceById[incident.id] = evidence;
   analysisReadyAt[incident.id] = Date.now() + ANALYSIS_DELAY_MS;
+  void requestAnalysis(incident);
   return incident;
 }
 
@@ -524,15 +582,17 @@ export const mockApi: TokenShieldApi = {
       return toIncidentV2(incident);
     }),
 
-  analyzeIncident: (id) =>
-    respond(() => {
-      const incident = findIncident(id);
+  analyzeIncident: async (id) => {
+    const incident = findIncident(id);
+    const live = await requestAnalysis(incident, true);
+    if (!live) {
       incident.gemini_explanation ??=
         'The agent kept repeating work that could not succeed in its current state. The pattern matches a missing guard in its retry or planning loop rather than a one-off failure.';
       if (incident.recommended_actions.length === 0) incident.recommended_actions = ['Add a retry limit to the failing step.'];
       analysisReadyAt[incident.id] = 0;
-      return toIncidentV2(incident);
-    }, 2_500),
+    }
+    return clone(toIncidentV2(incident));
+  },
 
   startSimulation: () =>
     respond((): V2.StartSimulationResponse => {
@@ -604,7 +664,11 @@ export const mockApi: TokenShieldApi = {
       return toGuards(id);
     }),
 
-  askOracle: (question, agentId) => respond(() => mockOracle(question, agentId), 900),
+  askOracle: async (question, agentId) => {
+    const live = await demoGemini<V2.OracleAnswer>({ kind: 'oracle', question, context: oracleContext(agentId) });
+    if (live && live.answer) return { answer: live.answer, key_points: live.key_points ?? [], next_step: live.next_step ?? '', source: 'gemini' };
+    return respond(() => mockOracle(question, agentId), 300);
+  },
 
   getNotificationStatus: () => respond((): V2.NotificationStatus => ({ discord: false, slack: false, email: false, gemini: false })),
 };

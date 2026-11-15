@@ -123,6 +123,15 @@ Or run a real agent that uses the SDK:
 PYTHONPATH=sdk python3 sdk/example_agent.py
 ```
 
+## Live Gemini on the Vercel demo
+
+The demo site runs its agents in the browser, but the Oracle can still use **real Gemini** through a Vercel server function (`frontend/api/gemini.ts`). The key stays on Vercel's servers.
+
+1. Vercel → your project → **Settings → Environment Variables** → add `GEMINI_API_KEY` (Production and Preview). Optionally `GEMINI_MODEL` (default `gemini-3.5-flash-lite`).
+2. Redeploy (push a commit, or Deployments → ⋯ → Redeploy).
+
+Free-tier safe: Flash-Lite models, 6 requests per minute per visitor, at most 8 automatic readings per visit, and automatic fallback to built-in answers if the quota runs out. **Never** put the key in a `VITE_` variable: those are visible in the browser.
+
 ## Using Tiger Data
 
 1. Create a TimescaleDB service in the Tiger Data console and copy its connection string.

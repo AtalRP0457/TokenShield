@@ -44,7 +44,7 @@ export function GeminiExplanation({ analysis, plainFallback, pending, analyzing,
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Sparkles className="size-4 text-bronze" />
         <h3 className="font-display text-sm font-semibold tracking-wide text-fg">The Oracle's reading</h3>
-        <span className="text-xs text-fg-subtle">Gemini analysis</span>
+        <span className="text-xs text-fg-subtle">{analysis?.is_sample ? 'Sample analysis (demo, not live Gemini)' : 'Gemini analysis'}</span>
         {analysis && (
           <span className="ml-auto flex items-center gap-2 text-xs text-fg-muted">
             <SeverityBadge severity={analysis.severity} />

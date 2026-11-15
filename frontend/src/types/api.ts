@@ -166,6 +166,8 @@ export interface GeminiAnalysis {
   additional_investigation: string[];
   /** 2–3 sentences anyone can follow. Missing on analyses made before this field existed. */
   plain_explanation?: string;
+  /** Demo site only: true when this is pre-written sample text, not a live Gemini answer. */
+  is_sample?: boolean;
 }
 
 /** GET /api/incidents?status=…  (newest first) ; GET /api/incidents/{id} */
