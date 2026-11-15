@@ -21,14 +21,16 @@ PERILS = {
 
 
 def build_context(db, agent_id: str | None = None) -> dict:
+    stats = {r[0]: (r[1] or 0, r[2] or 0.0) for r in db.execute(
+        select(AgentEvent.agent_id, func.sum(AgentEvent.total_tokens), func.sum(AgentEvent.estimated_cost))
+        .group_by(AgentEvent.agent_id)).all()}
+    opens = {r[0]: r[1] for r in db.execute(
+        select(Incident.agent_id, func.count()).where(Incident.status == "open")
+        .group_by(Incident.agent_id)).all()}
     agents = []
     for a in db.execute(select(Agent)).scalars():
-        tokens, cost = db.execute(
-            select(func.coalesce(func.sum(AgentEvent.total_tokens), 0),
-                   func.coalesce(func.sum(AgentEvent.estimated_cost), 0.0))
-            .where(AgentEvent.agent_id == a.id)).one()
-        open_inc = db.execute(select(func.count()).select_from(Incident)
-                              .where(Incident.agent_id == a.id, Incident.status == "open")).scalar()
+        tokens, cost = stats.get(a.id, (0, 0.0))
+        open_inc = opens.get(a.id, 0)
         agents.append({"id": a.id, "name": a.name.replace("[SIM] ", ""), "status": a.status,
                        "tokens": int(tokens), "estimated_cost_usd": round(float(cost), 4),
                        "open_problems": open_inc})

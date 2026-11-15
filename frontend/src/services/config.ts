@@ -15,7 +15,8 @@ export const config = {
   apiBaseUrl: (env.VITE_API_BASE_URL ?? '').replace(/\/+$/, ''),
   /** The backend contract asks clients to poll the feed and incidents every 2–3 s. */
   pollIntervalMs: Number(env.VITE_POLL_INTERVAL_MS ?? 2500) || 2500,
-  requestTimeoutMs: 10_000,
+  /** Generous: a free online backend can take ~50 s to wake from sleep. */
+  requestTimeoutMs: 30_000,
   /** POST /api/incidents/{id}/analyze re-runs Gemini and can take ~30 s. */
   analyzeTimeoutMs: 45_000,
 } as const;

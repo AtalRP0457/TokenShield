@@ -19,10 +19,14 @@ def require_key(x_api_key: str = Header(default="")):
         raise HTTPException(401, "invalid API key")
 
 
-def _incident_out(db, i: Incident) -> IncidentOut:
-    agent = db.get(Agent, i.agent_id)
+def _incident_out(db, i: Incident, names: dict | None = None) -> IncidentOut:
+    if names is not None:  # list views pass every agent name at once (one query, not one per row)
+        name = names.get(i.agent_id, "unknown")
+    else:
+        agent = db.get(Agent, i.agent_id)
+        name = agent.name if agent else "unknown"
     return IncidentOut(
-        id=i.id, agent_id=i.agent_id, agent_name=agent.name if agent else "unknown",
+        id=i.id, agent_id=i.agent_id, agent_name=name,
         task_id=i.task_id, incident_type=i.incident_type, severity=i.severity,
         description=i.description, evidence=i.evidence or {},
         repeated_calls=(i.evidence or {}).get("repeated_calls"),
@@ -41,6 +45,29 @@ def _agent_out(db, a: Agent) -> AgentOut:
                     is_simulated=a.is_simulated, created_at=a.created_at, last_seen=a.last_seen,
                     total_tokens=int(tokens), estimated_cost=round(float(cost), 6),
                     open_incidents=open_inc)
+
+
+def _agents_out(db) -> list[AgentOut]:
+    """All agents with their totals in THREE queries (not three per agent): fast even when the
+    database is far away (Render -> Tiger Data)."""
+    stats = {r[0]: (int(r[1] or 0), float(r[2] or 0.0)) for r in db.execute(
+        select(AgentEvent.agent_id, func.sum(AgentEvent.total_tokens), func.sum(AgentEvent.estimated_cost))
+        .group_by(AgentEvent.agent_id)).all()}
+    opens = {r[0]: int(r[1]) for r in db.execute(
+        select(Incident.agent_id, func.count()).where(Incident.status == "open")
+        .group_by(Incident.agent_id)).all()}
+    out = []
+    for a in db.execute(select(Agent)).scalars():
+        tokens, cost = stats.get(a.id, (0, 0.0))
+        out.append(AgentOut(id=a.id, name=a.name, description=a.description, status=a.status,
+                            is_simulated=a.is_simulated, created_at=a.created_at, last_seen=a.last_seen,
+                            total_tokens=tokens, estimated_cost=round(cost, 6),
+                            open_incidents=opens.get(a.id, 0)))
+    return out
+
+
+def _agent_names(db) -> dict:
+    return {r[0]: r[1] for r in db.execute(select(Agent.id, Agent.name)).all()}
 
 
 # ---------- ingestion ----------
@@ -68,7 +95,7 @@ def ingest_event(body: EventIn, db: Session = Depends(get_db)):
 # ---------- agents ----------
 @router.get("/agents", response_model=list[AgentOut])
 def list_agents(db: Session = Depends(get_db)):
-    return [_agent_out(db, a) for a in db.execute(select(Agent)).scalars()]
+    return _agents_out(db)
 
 
 @router.post("/agents", response_model=AgentOut)
@@ -231,7 +258,7 @@ def metrics_timeseries(minutes: int = 60, db: Session = Depends(get_db)):
 
 @router.get("/metrics/agents")
 def metrics_agents(db: Session = Depends(get_db)):
-    return [_agent_out(db, a) for a in db.execute(select(Agent)).scalars()]
+    return _agents_out(db)
 
 
 # ---------- incidents ----------
@@ -240,7 +267,8 @@ def list_incidents(status: str | None = None, db: Session = Depends(get_db)):
     q = select(Incident).order_by(Incident.created_at.desc())
     if status:
         q = q.where(Incident.status == status)
-    return [_incident_out(db, i) for i in db.execute(q).scalars()]
+    names = _agent_names(db)
+    return [_incident_out(db, i, names) for i in db.execute(q).scalars()]
 
 
 @router.get("/incidents/{incident_id}", response_model=IncidentOut)
