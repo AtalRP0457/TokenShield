@@ -4,7 +4,7 @@ import { api } from '../services';
 import { useApiQuery } from '../hooks/useApiQuery';
 import type { Incident, IncidentStatus, IncidentType, Severity } from '../types/api';
 import { INCIDENT_STATUS, INCIDENT_TYPE, SEVERITY } from '../lib/labels';
-import { formatUsd } from '../lib/format';
+import { formatUsd, parseUtc } from '../lib/format';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -16,7 +16,7 @@ import { IncidentTable } from '../components/incidents/IncidentTable';
 type Filter<T extends string> = 'all' | T;
 
 export function IncidentsPage() {
-  const incidents = useApiQuery(() => api.getIncidents(), [], { refreshMs: 10_000 });
+  const incidents = useApiQuery(() => api.getIncidents(), [], { refreshMs: 3_000 });
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<Filter<IncidentStatus | 'unresolved'>>('unresolved');
   const [severity, setSeverity] = useState<Filter<Severity>>('all');
@@ -30,13 +30,13 @@ export function IncidentsPage() {
     return all
       .filter((i) => (status === 'all' ? true : status === 'unresolved' ? i.status !== 'resolved' : i.status === status))
       .filter((i) => severity === 'all' || i.severity === severity)
-      .filter((i) => type === 'all' || i.type === type)
-      .filter((i) => !q || [i.id, i.title, i.agent_name].some((s) => s.toLowerCase().includes(q)))
-      .sort((a, b) => b.detected_at.localeCompare(a.detected_at));
+      .filter((i) => type === 'all' || i.incident_type === type)
+      .filter((i) => !q || [i.id, i.description, i.agent_name].some((s) => s.toLowerCase().includes(q)))
+      .sort((a, b) => parseUtc(b.created_at) - parseUtc(a.created_at));
   }, [all, query, status, severity, type]);
 
   const unresolved = all.filter((i) => i.status !== 'resolved');
-  const openWaste = unresolved.reduce((s, i) => s + i.estimated_waste_usd, 0);
+  const openWaste = unresolved.reduce((s, i) => s + i.estimated_waste, 0);
 
   const resolve = async (incident: Incident) => {
     setResolvingId(incident.id);
@@ -72,7 +72,7 @@ export function IncidentsPage() {
                 <p className="font-mono text-lg font-semibold text-fg tabular-nums">{unresolved.length}</p>
               </div>
               <div>
-                <p className="text-xs text-fg-subtle">Unresolved waste</p>
+                <p className="text-xs text-fg-subtle">Unresolved waste (est.)</p>
                 <p className="font-mono text-lg font-semibold text-orange-300 tabular-nums">{formatUsd(openWaste)}</p>
               </div>
             </div>
@@ -86,11 +86,11 @@ export function IncidentsPage() {
 
       <Card>
         <div className="grid grid-cols-2 gap-2 border-b border-line p-3 md:flex md:items-center">
-          <SearchInput value={query} onChange={setQuery} placeholder="Search ID, title or agent" className="col-span-2 md:w-64" />
+          <SearchInput value={query} onChange={setQuery} placeholder="Search ID, description or agent" className="col-span-2 md:w-64" />
           <Select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="md:w-36"
             options={[{ value: 'unresolved', label: 'Unresolved' }, { value: 'all', label: 'All statuses' }, ...Object.entries(INCIDENT_STATUS).map(([value, m]) => ({ value, label: m.label }))]} />
           <Select aria-label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)} className="md:w-36"
-            options={[{ value: 'all', label: 'All severities' }, ...Object.entries(SEVERITY).map(([value, m]) => ({ value, label: m.label }))]} />
+            options={[{ value: 'all', label: 'All severities' }, ...Object.entries(SEVERITY).filter(([value]) => value !== 'low').map(([value, m]) => ({ value, label: m.label }))]} />
           <Select aria-label="Type" value={type} onChange={(e) => setType(e.target.value as typeof type)} className="col-span-2 md:w-60"
             options={[{ value: 'all', label: 'All types' }, ...Object.entries(INCIDENT_TYPE).map(([value, m]) => ({ value, label: `${m.peril} · ${m.label}` }))]} />
           {incidents.data && <p className="col-span-2 whitespace-nowrap text-xs text-fg-subtle md:ml-auto">{visible.length} shown</p>}

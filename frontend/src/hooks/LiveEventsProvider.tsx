@@ -1,14 +1,25 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AgentEvent } from '../types/api';
+import type { Agent, AgentEvent } from '../types/api';
+import { api } from '../services';
 import { startLiveFeed, type FeedStatus } from '../services/liveFeed';
+import { parseUtc } from '../lib/format';
+import { useApiQuery } from './useApiQuery';
 import { LiveEventsContext, type LiveEventsValue } from './liveEventsContext';
 
 const MAX_EVENTS = 500;
 
+const newestFirst = (a: AgentEvent, b: AgentEvent) => parseUtc(b.timestamp) - parseUtc(a.timestamp);
+
+function merge(prev: AgentEvent[], incoming: AgentEvent[]): AgentEvent[] {
+  const seen = new Set(prev.map((e) => e.id));
+  const fresh = incoming.filter((e) => !seen.has(e.id));
+  if (fresh.length === 0) return prev;
+  return [...fresh, ...prev].sort(newestFirst).slice(0, MAX_EVENTS);
+}
+
 /**
- * One live connection for the whole app, shared through context, so the
- * dashboard widget, the Activity page and the header indicator don't each open
- * their own WebSocket.
+ * One polling loop for the whole app, shared through context, so the
+ * dashboard widget, the Activity page and the header indicator don't each poll.
  */
 export function LiveEventsProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<AgentEvent[]>([]);
@@ -19,27 +30,27 @@ export function LiveEventsProvider({ children }: { children: ReactNode }) {
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
 
-  useEffect(() => {
-    const merge = (prev: AgentEvent[], incoming: AgentEvent[]) => {
-      const seen = new Set(prev.map((e) => e.id));
-      const fresh = incoming.filter((e) => !seen.has(e.id));
-      if (fresh.length === 0) return prev;
-      return [...fresh, ...prev]
-        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-        .slice(0, MAX_EVENTS);
-    };
+  const agents = useApiQuery(() => api.getAgents(), [], { refreshMs: 5_000 });
+  const agentsById = useMemo(() => {
+    const map: Record<string, Agent> = {};
+    agents.data?.forEach((a) => (map[a.id] = a));
+    return map;
+  }, [agents.data]);
 
-    return startLiveFeed({
-      onEvents: (incoming) => {
-        if (pausedRef.current) setBuffered((prev) => merge(prev, incoming));
-        else setEvents((prev) => merge(prev, incoming));
-      },
-      onStatus: (s, detail) => {
-        setStatus(s);
-        setStatusDetail(detail);
-      },
-    });
-  }, []);
+  useEffect(
+    () =>
+      startLiveFeed({
+        onEvents: (incoming) => {
+          if (pausedRef.current) setBuffered((prev) => merge(prev, incoming));
+          else setEvents((prev) => merge(prev, incoming));
+        },
+        onStatus: (s, detail) => {
+          setStatus(s);
+          setStatusDetail(detail);
+        },
+      }),
+    [],
+  );
 
   const value = useMemo<LiveEventsValue>(
     () => ({
@@ -48,21 +59,16 @@ export function LiveEventsProvider({ children }: { children: ReactNode }) {
       statusDetail,
       paused,
       bufferedCount: buffered.length,
+      agentsById,
       setPaused: (next) => {
         setPaused(next);
         if (!next) {
-          // flush what arrived while paused
-          setEvents((prev) => {
-            const seen = new Set(prev.map((e) => e.id));
-            return [...buffered.filter((e) => !seen.has(e.id)), ...prev]
-              .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-              .slice(0, MAX_EVENTS);
-          });
+          setEvents((prev) => merge(prev, buffered));
           setBuffered([]);
         }
       },
     }),
-    [events, status, statusDetail, paused, buffered],
+    [events, status, statusDetail, paused, buffered, agentsById],
   );
 
   return <LiveEventsContext.Provider value={value}>{children}</LiveEventsContext.Provider>;

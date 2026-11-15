@@ -17,10 +17,11 @@ interface TimeSeriesChartProps<T> {
   series: SeriesSpec<T>[];
   stacked?: boolean;
   height?: number;
-  formatX: (value: string) => string;
+  /** x values are epoch milliseconds. */
+  formatX: (value: number) => string;
   formatY: (value: number) => string;
   formatTooltipValue?: (value: number) => string;
-  formatTooltipLabel?: (value: string) => string;
+  formatTooltipLabel?: (value: number) => string;
 }
 
 /**

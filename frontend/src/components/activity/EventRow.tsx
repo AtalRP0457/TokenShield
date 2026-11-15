@@ -1,20 +1,32 @@
 import { Link } from 'react-router-dom';
 import type { AgentEvent } from '../../types/api';
-import { EVENT_TYPE, FALLBACK_EVENT, TONE_CLASSES } from '../../lib/labels';
+import { displayAgentName, eventMeta, TONE_CLASSES } from '../../lib/labels';
 import { formatInteger, formatTime, formatUsd } from '../../lib/format';
 import { cn } from '../ui/cn';
 
 interface EventRowProps {
   event: AgentEvent;
+  /** Events only carry agent_id; pass the resolved name (or omit to hide). */
+  agentName?: string;
   showAgent?: boolean;
   compact?: boolean;
   isNew?: boolean;
 }
 
-export function EventRow({ event, showAgent = true, compact, isNew }: EventRowProps) {
-  const meta = EVENT_TYPE[event.type] ?? FALLBACK_EVENT;
+/** One readable sentence for an event, built from its fields. */
+export function describeEvent(e: AgentEvent): string {
+  const label = eventMeta(e.event_type).label;
+  const subject = e.tool_name ?? label;
+  if (e.success === false) return `${subject} failed${e.error_message ? `: ${e.error_message}` : ''}`;
+  if (e.event_type === 'tool_call') return `${subject} ${e.success ? 'succeeded' : 'called'}`;
+  if (e.total_tokens) return `${label} · ${formatInteger(e.total_tokens)} tokens`;
+  return e.tool_name ? `${label}: ${e.tool_name}` : label;
+}
+
+export function EventRow({ event, agentName, showAgent = true, compact, isNew }: EventRowProps) {
+  const meta = eventMeta(event.event_type);
   const failed = event.success === false;
-  const tone = failed && event.type === 'tool_call' ? 'danger' : meta.tone;
+  const tone = failed ? 'danger' : meta.tone;
   const Icon = meta.icon;
 
   return (
@@ -26,18 +38,22 @@ export function EventRow({ event, showAgent = true, compact, isNew }: EventRowPr
         <p className="flex flex-wrap items-center gap-x-2 text-sm">
           {showAgent && (
             <Link to={`/agents/${event.agent_id}`} className="font-medium text-fg hover:underline">
-              {event.agent_name}
+              {agentName ? displayAgentName(agentName) : `Agent ${event.agent_id.slice(0, 8)}`}
             </Link>
           )}
-          <span className={cn('truncate', failed ? 'text-red-300' : 'text-fg-muted')}>{event.message}</span>
+          <span className={cn('min-w-0 truncate', failed ? 'text-red-300' : 'text-fg-muted')}>{describeEvent(event)}</span>
         </p>
         {!compact && (
           <p className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[11px] text-fg-subtle">
             <span>{meta.label}</span>
-            {event.tool_name && <span>{event.tool_name}</span>}
-            {event.tokens != null && <span>{formatInteger(event.tokens)} tok</span>}
-            {event.cost_usd != null && <span>{formatUsd(event.cost_usd)}</span>}
-            {event.latency_ms != null && <span>{formatInteger(event.latency_ms)} ms</span>}
+            {event.model && <span>{event.model}</span>}
+            {event.total_tokens != null && (
+              <span title={event.input_tokens != null ? `${formatInteger(event.input_tokens)} in / ${formatInteger(event.output_tokens ?? 0)} out` : undefined}>
+                {formatInteger(event.total_tokens)} tok
+              </span>
+            )}
+            {event.estimated_cost != null && <span>{formatUsd(event.estimated_cost)} est.</span>}
+            {event.duration_ms != null && event.duration_ms > 0 && <span>{formatInteger(event.duration_ms)} ms</span>}
           </p>
         )}
       </div>

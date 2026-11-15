@@ -3,7 +3,8 @@ import { Bot, RefreshCw } from 'lucide-react';
 import { api } from '../services';
 import { useApiQuery } from '../hooks/useApiQuery';
 import type { AgentStatus } from '../types/api';
-import { AGENT_STATUS } from '../lib/labels';
+import { AGENT_STATUS, displayAgentName } from '../lib/labels';
+import { parseUtc } from '../lib/format';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -13,21 +14,22 @@ import { EmptyState, ErrorState, LoadingState } from '../components/ui/States';
 import { AgentTable, type AgentSortKey } from '../components/agents/AgentTable';
 
 export function AgentsPage() {
-  const agents = useApiQuery(() => api.getAgents(), [], { refreshMs: 10_000 });
+  const agents = useApiQuery(() => api.getAgents(), [], { refreshMs: 3_000 });
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | AgentStatus>('all');
-  const [sortKey, setSortKey] = useState<AgentSortKey>('total_cost_usd');
+  const [sortKey, setSortKey] = useState<AgentSortKey>('estimated_cost');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (agents.data ?? [])
       .filter((a) => status === 'all' || a.status === status)
-      .filter((a) => !q || a.name.toLowerCase().includes(q) || a.model.toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
+      .filter((a) => !q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
       .sort((a, b) => {
-        const av = a[sortKey];
-        const bv = b[sortKey];
-        const cmp = typeof av === 'string' ? av.localeCompare(String(bv)) : (av as number) - (bv as number);
+        const cmp =
+          sortKey === 'name' ? displayAgentName(a.name).localeCompare(displayAgentName(b.name))
+          : sortKey === 'last_seen' ? parseUtc(a.last_seen) - parseUtc(b.last_seen)
+          : a[sortKey] - b[sortKey];
         return sortDir === 'asc' ? cmp : -cmp;
       });
   }, [agents.data, query, status, sortKey, sortDir]);
@@ -49,7 +51,7 @@ export function AgentsPage() {
       />
       <Card>
         <div className="flex flex-col gap-2 border-b border-line p-3 sm:flex-row sm:items-center">
-          <SearchInput value={query} onChange={setQuery} placeholder="Search by name, model or ID" className="sm:w-72" />
+          <SearchInput value={query} onChange={setQuery} placeholder="Search by name, description or ID" className="sm:w-72" />
           <Select
             aria-label="Filter by status"
             value={status}
@@ -65,7 +67,7 @@ export function AgentsPage() {
         ) : agents.loading ? (
           <LoadingState rows={6} className="p-4" />
         ) : agents.data!.length === 0 ? (
-          <EmptyState icon={Bot} title="No agents registered" description="Agents appear here after they call POST /api/agents/register." />
+          <EmptyState icon={Bot} title="No agents registered" description="Agents appear here once they send events to TokenShield. Start a simulation to add demo agents." />
         ) : visible.length === 0 ? (
           <EmptyState
             icon={Bot}

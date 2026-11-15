@@ -20,12 +20,12 @@ export function SuspiciousBehavior({ incidents }: { incidents: Incident[] }) {
             <div className="flex flex-wrap items-center gap-2">
               <SeverityBadge severity={i.severity} />
               <IncidentStatusBadge status={i.status} />
-              <span className="ml-auto font-mono text-xs text-orange-300 tabular-nums">{formatUsd(i.estimated_waste_usd)} wasted</span>
+              <span className="ml-auto font-mono text-xs text-orange-300 tabular-nums">{formatUsd(i.estimated_waste)} est. waste</span>
             </div>
-            <p className="mt-1.5 text-sm text-fg">{i.title}</p>
+            <p className="mt-1.5 text-sm text-fg">{i.description}</p>
             <p className="mt-0.5 flex items-center gap-2 text-xs">
-              <IncidentTypeLabel type={i.type} />
-              <span className="text-fg-subtle">· {formatRelative(i.detected_at, now)}</span>
+              <IncidentTypeLabel type={i.incident_type} />
+              <span className="text-fg-subtle">· {formatRelative(i.created_at, now)}</span>
             </p>
           </Link>
         </li>

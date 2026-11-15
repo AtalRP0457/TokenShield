@@ -11,7 +11,7 @@ import type {
   CostMetricPoint,
   Incident,
   TokenMetricPoint,
-} from '../../types/api';
+} from './mockTypes';
 
 /* ---------------- deterministic RNG ---------------- */
 
@@ -314,7 +314,7 @@ export function seedIncidents(events: AgentEvent[]): Incident[] {
     },
     {
       id: 'inc_1041', agent_id: 'agt_codereview', agent_name: 'Code Review Agent',
-      type: 'token_limit_exceeded', severity: 'high', status: 'investigating',
+      type: 'token_limit_exceeded', severity: 'high', status: 'acknowledged',
       title: 'Single task consumed 1.2M tokens',
       description: 'Task “Review PR #1287 payments-service” exceeded the per-task token budget by 6×.',
       estimated_waste_usd: 9.75, detected_at: iso(now - 52 * 60_000), resolved_at: null,

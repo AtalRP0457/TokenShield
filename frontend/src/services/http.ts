@@ -15,6 +15,14 @@ export class ApiError extends Error {
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
+export interface RequestOptions {
+  body?: unknown;
+  /** Appended as ?key=value (undefined values are skipped). */
+  query?: Record<string, string | number | undefined>;
+  /** Override the default timeout (e.g. Gemini re-analysis can take ~30 s). */
+  timeoutMs?: number;
+}
+
 /**
  * Thin wrapper around fetch():
  *  - prefixes the configured base URL
@@ -22,13 +30,20 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
  *  - aborts after a timeout so a dead backend can't hang the UI
  *  - turns non-2xx responses into ApiError (FastAPI puts the reason in `detail`)
  */
-export async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: Method, path: string, options: RequestOptions = {}): Promise<T> {
+  const { body, query, timeoutMs = config.requestTimeoutMs } = options;
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), config.requestTimeoutMs);
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const qs = query
+    ? Object.entries(query)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .join('&')
+    : '';
 
   let response: Response;
   try {
-    response = await fetch(`${config.apiBaseUrl}${path}`, {
+    response = await fetch(`${config.apiBaseUrl}${path}${qs ? `?${qs}` : ''}`, {
       method,
       headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -37,7 +52,7 @@ export async function request<T>(method: Method, path: string, body?: unknown): 
   } catch (err) {
     const reason =
       err instanceof DOMException && err.name === 'AbortError'
-        ? `Request timed out after ${config.requestTimeoutMs / 1000}s`
+        ? `Request timed out after ${Math.round(timeoutMs / 1000)}s`
         : `Cannot reach the TokenShield API at ${config.apiBaseUrl}`;
     throw new ApiError(reason, path);
   } finally {

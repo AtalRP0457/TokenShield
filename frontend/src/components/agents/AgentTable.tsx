@@ -1,12 +1,14 @@
 import { useNavigate, Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { Agent } from '../../types/api';
+import { displayAgentName } from '../../lib/labels';
 import { formatCompact, formatInteger, formatRelative, formatUsd } from '../../lib/format';
 import { useNow } from '../../hooks/useNow';
 import { AgentStatusBadge } from './AgentStatusBadge';
+import { SimulatedBadge } from '../ui/SimulatedBadge';
 import { cn } from '../ui/cn';
 
-export type AgentSortKey = 'name' | 'total_tokens' | 'total_cost_usd' | 'tool_calls' | 'incident_count';
+export type AgentSortKey = 'name' | 'total_tokens' | 'estimated_cost' | 'open_incidents' | 'last_seen';
 
 interface AgentTableProps {
   agents: Agent[];
@@ -19,16 +21,12 @@ const COLUMNS: { key: AgentSortKey | null; label: string; align?: 'right' }[] = 
   { key: 'name', label: 'Agent' },
   { key: null, label: 'Status' },
   { key: 'total_tokens', label: 'Tokens', align: 'right' },
-  { key: 'total_cost_usd', label: 'Est. spend', align: 'right' },
-  { key: 'tool_calls', label: 'Tool calls', align: 'right' },
-  { key: 'incident_count', label: 'Incidents', align: 'right' },
+  { key: 'estimated_cost', label: 'Est. cost', align: 'right' },
+  { key: 'open_incidents', label: 'Open incidents', align: 'right' },
+  { key: 'last_seen', label: 'Last seen', align: 'right' },
 ];
 
-/**
- * Table on md+ screens, stacked cards on mobile. Rows are fully clickable
- * (navigate on click) but the agent name is also a real <Link> so keyboard
- * users and "open in new tab" work.
- */
+/** Table on md+ screens, stacked cards on mobile. Rows are clickable; names are real links. */
 export function AgentTable({ agents, sortKey, sortDir, onSort }: AgentTableProps) {
   const navigate = useNavigate();
   const now = useNow();
@@ -58,21 +56,19 @@ export function AgentTable({ agents, sortKey, sortDir, onSort }: AgentTableProps
             {agents.map((a) => (
               <tr key={a.id} onClick={() => navigate(`/agents/${a.id}`)} className="group cursor-pointer transition-colors hover:bg-surface-2">
                 <td className="px-5 py-3">
-                  <Link to={`/agents/${a.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-fg hover:underline">
-                    {a.name}
-                  </Link>
-                  <p className="mt-0.5 text-xs text-fg-subtle">
-                    <span className="font-mono">{a.model}</span> · seen {formatRelative(a.last_seen_at, now)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <Link to={`/agents/${a.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-fg hover:underline">
+                      {displayAgentName(a.name)}
+                    </Link>
+                    {a.is_simulated && <SimulatedBadge />}
+                  </div>
+                  {a.description && <p className="mt-0.5 max-w-xs truncate text-xs text-fg-subtle">{a.description}</p>}
                 </td>
-                <td className="px-5 py-3"><AgentStatusBadge status={a.status} pausedBy={a.paused_by} /></td>
+                <td className="px-5 py-3"><AgentStatusBadge status={a.status} /></td>
                 <td className="px-5 py-3 text-right font-mono tabular-nums" title={formatInteger(a.total_tokens)}>{formatCompact(a.total_tokens)}</td>
-                <td className="px-5 py-3 text-right font-mono tabular-nums">{formatUsd(a.total_cost_usd)}</td>
-                <td className="px-5 py-3 text-right font-mono tabular-nums">
-                  {formatInteger(a.tool_calls)}
-                  {a.failed_tool_calls > 0 && <span className="block whitespace-nowrap text-xs text-red-300">{formatInteger(a.failed_tool_calls)} failed</span>}
-                </td>
-                <td className={cn('px-5 py-3 text-right font-mono tabular-nums', a.incident_count > 0 ? 'text-orange-300' : 'text-fg-subtle')}>{a.incident_count}</td>
+                <td className="px-5 py-3 text-right font-mono tabular-nums">{formatUsd(a.estimated_cost)}</td>
+                <td className={cn('px-5 py-3 text-right font-mono tabular-nums', a.open_incidents > 0 ? 'text-orange-300' : 'text-fg-subtle')}>{a.open_incidents}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-right text-xs text-fg-muted">{formatRelative(a.last_seen, now)}</td>
                 <td className="pr-4"><ChevronRight className="size-4 text-fg-subtle transition-transform group-hover:translate-x-0.5" /></td>
               </tr>
             ))}
@@ -85,19 +81,22 @@ export function AgentTable({ agents, sortKey, sortDir, onSort }: AgentTableProps
           <li key={a.id}>
             <Link to={`/agents/${a.id}`} className="block px-4 py-3.5 hover:bg-surface-2">
               <div className="flex items-center justify-between gap-3">
-                <span className="truncate font-medium text-fg">{a.name}</span>
-                <AgentStatusBadge status={a.status} pausedBy={a.paused_by} />
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium text-fg">{displayAgentName(a.name)}</span>
+                  {a.is_simulated && <SimulatedBadge compact />}
+                </span>
+                <AgentStatusBadge status={a.status} />
               </div>
               <dl className="mt-2.5 grid grid-cols-4 gap-2 text-xs">
                 {[
                   ['Tokens', formatCompact(a.total_tokens)],
-                  ['Spend', formatUsd(a.total_cost_usd)],
-                  ['Calls', formatCompact(a.tool_calls)],
-                  ['Incidents', String(a.incident_count)],
+                  ['Est. cost', formatUsd(a.estimated_cost)],
+                  ['Incidents', String(a.open_incidents)],
+                  ['Seen', formatRelative(a.last_seen, now)],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="text-fg-subtle">{label}</dt>
-                    <dd className="mt-0.5 font-mono text-fg tabular-nums">{value}</dd>
+                    <dd className="mt-0.5 truncate font-mono text-fg tabular-nums">{value}</dd>
                   </div>
                 ))}
               </dl>

@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, CloudLightning, FlaskConical, Play, Square, Tornado, Wind } from 'lucide-react';
+import { ChevronDown, FlaskConical, Play, Square } from 'lucide-react';
 import { useSimulation } from '../../hooks/useSimulation';
-import type { SimulationScenario } from '../../types/api';
+import { SCENARIOS } from '../../lib/scenarios';
 import { Button } from '../ui/Button';
-
-const SCENARIOS: { id: SimulationScenario; label: string; description: string; icon: typeof Wind }[] = [
-  { id: 'execution_loop', label: 'Summon Charybdis', description: 'Execution loop: same tool call, again and again', icon: Tornado },
-  { id: 'failure_storm', label: "Raise Poseidon's storm", description: 'Failure storm: burst of upstream API errors', icon: CloudLightning },
-  { id: 'token_spike', label: "Open Aeolus' bag", description: 'Token spike: huge completions back to back', icon: Wind },
-];
 
 /** Demo controls → POST /api/simulation/start | stop | trigger. */
 export function SimulationControls() {
@@ -42,13 +36,13 @@ export function SimulationControls() {
             <div>
               <p className="text-xs font-medium text-fg">Traffic simulator</p>
               <p className="text-[11px] text-fg-subtle">
-                {sim.running === null ? 'Status unknown' : sim.running ? 'Generating events' : 'Stopped'}
+                {sim.running === null ? 'Simulated agents' : sim.running ? 'Running' : 'Stopped'}
               </p>
             </div>
             <div className="flex gap-1.5">
               {sim.running !== true && (
                 <Button size="sm" variant="primary" icon={Play} onClick={() => void sim.start()} disabled={sim.pending}>
-                  Start
+                  Start all
                 </Button>
               )}
               {sim.running !== false && (
@@ -60,7 +54,7 @@ export function SimulationControls() {
           </div>
           <div className="p-1.5">
             <p className="px-2 pt-1 pb-1.5 text-[11px] font-medium tracking-wide text-fg-subtle uppercase">Unleash a peril</p>
-            {SCENARIOS.map(({ id, label, description, icon: Icon }) => (
+            {SCENARIOS.map(({ id, label, description, icon: Icon, recommended }) => (
               <button
                 key={id}
                 role="menuitem"
@@ -74,7 +68,10 @@ export function SimulationControls() {
               >
                 <Icon className="mt-0.5 size-4 shrink-0 text-bronze" />
                 <span>
-                  <span className="block text-xs font-medium text-fg">{label}</span>
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-fg">
+                    {label}
+                    {recommended && <span className="rounded bg-bronze/15 px-1 text-[10px] text-bronze">best demo</span>}
+                  </span>
                   <span className="block text-[11px] text-fg-subtle">{description}</span>
                 </span>
               </button>

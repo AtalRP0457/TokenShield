@@ -14,7 +14,7 @@ interface ChartTooltipProps {
   label?: string | number;
   // Ours:
   valueFormatter?: (value: number) => string;
-  labelFormatter?: (label: string) => string;
+  labelFormatter?: (label: number) => string;
   showTotal?: boolean;
 }
 
@@ -25,7 +25,7 @@ export function ChartTooltip({ active, payload, label, valueFormatter = String, 
   return (
     <div className="min-w-40 rounded-lg border px-3 py-2 text-xs shadow-xl" style={{ background: CHART.tooltipBg, borderColor: CHART.tooltipBorder }}>
       {label !== undefined && (
-        <p className="mb-1.5 font-medium text-fg">{labelFormatter ? labelFormatter(String(label)) : label}</p>
+        <p className="mb-1.5 font-medium text-fg">{labelFormatter ? labelFormatter(Number(label)) : label}</p>
       )}
       <ul className="space-y-1">
         {payload.map((p) => (

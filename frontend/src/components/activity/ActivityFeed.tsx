@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Radio } from 'lucide-react';
 import type { AgentEvent } from '../../types/api';
 import { EmptyState, LoadingState } from '../ui/States';
+import { useLiveEvents } from '../../hooks/useLiveEvents';
 import { EventRow } from './EventRow';
 
 interface ActivityFeedProps {
@@ -18,6 +19,7 @@ interface ActivityFeedProps {
  * genuinely new rows get the highlight animation (not the whole list on mount).
  */
 export function ActivityFeed({ events, loading, compact, showAgent, emptyTitle = 'Waiting for events', emptyDescription = 'Agent activity will stream in here in real time.' }: ActivityFeedProps) {
+  const { agentsById } = useLiveEvents();
   const seen = useRef<Set<string> | null>(null);
   const firstRender = seen.current === null;
   if (seen.current === null) seen.current = new Set(events.map((e) => e.id));
@@ -32,7 +34,7 @@ export function ActivityFeed({ events, loading, compact, showAgent, emptyTitle =
   return (
     <ul className="divide-y divide-line">
       {events.map((e) => (
-        <EventRow key={e.id} event={e} compact={compact} showAgent={showAgent} isNew={!firstRender && !seen.current!.has(e.id)} />
+        <EventRow key={e.id} event={e} agentName={agentsById[e.agent_id]?.name} compact={compact} showAgent={showAgent} isNew={!firstRender && !seen.current!.has(e.id)} />
       ))}
     </ul>
   );

@@ -1,44 +1,38 @@
 import type {
   Agent,
-  AgentDetail,
   AgentEvent,
-  AgentMetric,
-  CostMetricPoint,
   HealthResponse,
   Incident,
-  IngestEventRequest,
-  IngestEventResponse,
-  PauseAgentRequest,
+  IncidentStatus,
   MetricsOverview,
-  RegisterAgentRequest,
-  SimulationStatus,
-  TokenMetricPoint,
-  TriggerSimulationRequest,
+  ResumeAgentResponse,
+  SimulationScenario,
+  StartSimulationResponse,
+  StopSimulationResponse,
+  TimeseriesResponse,
+  TriggerSimulationResponse,
   UpdateIncidentRequest,
 } from '../types/api';
 
 /**
- * The single interface every data source implements. Pages and hooks only
- * ever talk to this — they never know whether data is mocked or real.
- * One method per backend endpoint.
+ * The single interface every data source implements (real FastAPI client and
+ * in-browser mock). Pages and hooks only ever talk to this. One method per
+ * backend endpoint the UI uses.
  */
 export interface TokenShieldApi {
-  registerAgent(body: RegisterAgentRequest): Promise<Agent>;
-  ingestEvent(body: IngestEventRequest): Promise<IngestEventResponse>;
-  getAgents(): Promise<Agent[]>;
-  getAgent(agentId: string): Promise<AgentDetail>;
-  getAgentEvents(agentId: string): Promise<AgentEvent[]>;
-  pauseAgent(agentId: string, body: PauseAgentRequest): Promise<Agent>;
-  resumeAgent(agentId: string): Promise<Agent>;
   getOverview(): Promise<MetricsOverview>;
-  getTokenMetrics(): Promise<TokenMetricPoint[]>;
-  getCostMetrics(): Promise<CostMetricPoint[]>;
-  getAgentMetrics(): Promise<AgentMetric[]>;
-  getIncidents(): Promise<Incident[]>;
+  getTimeseries(minutes: number): Promise<TimeseriesResponse>;
+  getAgents(): Promise<Agent[]>;
+  getAgent(agentId: string): Promise<Agent>;
+  getAgentEvents(agentId: string, limit?: number): Promise<AgentEvent[]>;
+  resumeAgent(agentId: string): Promise<ResumeAgentResponse>;
+  getRecentEvents(limit?: number): Promise<AgentEvent[]>;
+  getIncidents(status?: IncidentStatus): Promise<Incident[]>;
   getIncident(incidentId: string): Promise<Incident>;
   updateIncident(incidentId: string, body: UpdateIncidentRequest): Promise<Incident>;
-  startSimulation(): Promise<SimulationStatus>;
-  stopSimulation(): Promise<SimulationStatus>;
-  triggerSimulation(body: TriggerSimulationRequest): Promise<SimulationStatus>;
+  analyzeIncident(incidentId: string): Promise<Incident>;
+  startSimulation(): Promise<StartSimulationResponse>;
+  stopSimulation(): Promise<StopSimulationResponse>;
+  triggerSimulation(scenario: SimulationScenario): Promise<TriggerSimulationResponse>;
   getHealth(): Promise<HealthResponse>;
 }

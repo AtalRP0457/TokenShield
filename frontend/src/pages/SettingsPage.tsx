@@ -73,10 +73,11 @@ export function SettingsPage() {
             </>
           ) : (
             <>
-              <p className="font-medium text-amber-200">Configured here, not yet enforced by the backend</p>
+              <p className="font-medium text-amber-200">The backend uses its own built-in limits for now</p>
               <p className="mt-1">
-                The TokenShield API doesn’t expose a settings endpoint yet, so these limits are saved in your browser only.
-                Each limit shows its enforcement status; it will switch to <span className="text-fg">Enforced by backend</span> once the API supports it.
+                TokenShield’s backend already detects loops, failure streaks and budget overruns, and pauses the agent, using its own thresholds.
+                It doesn’t expose a settings endpoint yet, so the values here are saved in your browser only. Each limit will switch to{' '}
+                <span className="text-fg">Enforced by backend</span> once the API supports it.
               </p>
             </>
           )}

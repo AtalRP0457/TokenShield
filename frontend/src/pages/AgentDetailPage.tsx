@@ -5,21 +5,28 @@ import { api, ApiError } from '../services';
 import { useApiQuery } from '../hooks/useApiQuery';
 import { useNow } from '../hooks/useNow';
 import { bucketEvents } from '../lib/bucketEvents';
-import { formatCompact, formatDateTime, formatInteger, formatPercent, formatRelative, formatTime, formatUsd, formatUsdAxis } from '../lib/format';
+import { deriveTasks } from '../lib/deriveTasks';
+import { displayAgentName } from '../lib/labels';
+import {
+  formatClockMs, formatCompact, formatDateTime, formatDateTimeMs, formatInteger, formatPercent, formatRelative, formatUsd, formatUsdAxis, parseUtc,
+} from '../lib/format';
 import { CHART, SERIES } from '../lib/chartTheme';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/States';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Stat } from '../components/ui/Stat';
+import { SimulatedBadge } from '../components/ui/SimulatedBadge';
 import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
-import { AgentControls, PausedBanner } from '../components/agents/AgentControls';
+import { PausedBanner, ResumeAgentButton } from '../components/agents/AgentControls';
 import { AgentTaskList } from '../components/agents/AgentTaskList';
 import { ToolCallTable } from '../components/agents/ToolCallTable';
 import { SuspiciousBehavior } from '../components/agents/SuspiciousBehavior';
 import { ChartFrame } from '../components/charts/ChartFrame';
 import { TimeSeriesChart } from '../components/charts/TimeSeriesChart';
 import { ActivityFeed } from '../components/activity/ActivityFeed';
+
+const POLL_MS = 3_000;
 
 const Back = () => (
   <Link to="/agents" className="inline-flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg">
@@ -29,25 +36,28 @@ const Back = () => (
 
 export function AgentDetailPage() {
   const { agentId = '' } = useParams();
-  const now = useNow();
-  const agent = useApiQuery(() => api.getAgent(agentId), [agentId], { refreshMs: 5_000 });
-  const events = useApiQuery(() => api.getAgentEvents(agentId), [agentId], { refreshMs: 5_000 });
-  const incidents = useApiQuery(() => api.getIncidents(), [], { refreshMs: 10_000 });
+  const now = useNow(5_000);
+  const agent = useApiQuery(() => api.getAgent(agentId), [agentId], { refreshMs: POLL_MS });
+  const events = useApiQuery(() => api.getAgentEvents(agentId, 100), [agentId], { refreshMs: POLL_MS });
+  const incidents = useApiQuery(() => api.getIncidents(), [], { refreshMs: POLL_MS });
 
-  const sortedEvents = useMemo(() => [...(events.data ?? [])].sort((a, b) => b.timestamp.localeCompare(a.timestamp)), [events.data]);
-  const toolCalls = sortedEvents.filter((e) => e.type === 'tool_call' || e.type === 'api_failure' || e.type === 'repeated_call');
+  const sortedEvents = useMemo(() => [...(events.data ?? [])].sort((a, b) => parseUtc(b.timestamp) - parseUtc(a.timestamp)), [events.data]);
+  const toolCalls = sortedEvents.filter((e) => e.event_type === 'tool_call');
   const errors = sortedEvents.filter((e) => e.success === false).slice(0, 10);
+  const failedCalls = toolCalls.filter((e) => e.success === false).length;
   const buckets = useMemo(() => bucketEvents(sortedEvents, now), [sortedEvents, now]);
-  const agentIncidents = (incidents.data ?? []).filter((i) => i.agent_id === agentId).sort((a, b) => b.detected_at.localeCompare(a.detected_at));
+  const tasks = useMemo(() => deriveTasks(sortedEvents, now), [sortedEvents, now]);
+  const model = sortedEvents.find((e) => e.model)?.model;
+  const agentIncidents = (incidents.data ?? []).filter((i) => i.agent_id === agentId).sort((a, b) => parseUtc(b.created_at) - parseUtc(a.created_at));
 
   if (agent.error) {
     const notFound = agent.error instanceof ApiError && agent.error.status === 404;
     return (
       <>
-        <PageHeader title="Agent" breadcrumb={<Back />} />
+        <PageHeader title="Hero" breadcrumb={<Back />} />
         <Card>
           {notFound ? (
-            <EmptyState icon={Bot} title="Agent not found" description={`No agent with ID “${agentId}” is registered.`} action={<Link to="/agents" className="text-sm text-accent hover:underline">Back to agents</Link>} />
+            <EmptyState icon={Bot} title="Agent not found" description={`No agent with ID “${agentId}”.`} action={<Link to="/agents" className="text-sm text-accent hover:underline">Back to heroes</Link>} />
           ) : (
             <ErrorState error={agent.error} onRetry={agent.refetch} title="Could not load agent" />
           )}
@@ -57,68 +67,61 @@ export function AgentDetailPage() {
   }
 
   const a = agent.data;
-  const isShortSpan = buckets.length > 1 && Date.parse(buckets[1].timestamp) - Date.parse(buckets[0].timestamp) < 3_600_000;
-  const formatX = isShortSpan ? (v: string) => formatTime(v).slice(0, 5) : formatDateTime;
 
   return (
     <>
       <PageHeader
         breadcrumb={<Back />}
-        title={a ? <span className="flex flex-wrap items-center gap-3">{a.name}<AgentStatusBadge status={a.status} pausedBy={a.paused_by} /></span> : <Skeleton className="h-7 w-56" />}
-        description={a?.description}
-        actions={
-          a && (
-            <AgentControls
-              agent={a}
-              pause={(reason) => api.pauseAgent(a.id, { reason })}
-              resume={() => api.resumeAgent(a.id)}
-              onChange={(updated) => {
-                agent.setData((prev) => (prev ? { ...prev, ...updated } : prev));
-                void agent.refetch();
-                void events.refetch();
-              }}
-            />
+        title={
+          a ? (
+            <span className="flex flex-wrap items-center gap-3">
+              {displayAgentName(a.name)}
+              <AgentStatusBadge status={a.status} />
+              {a.is_simulated && <SimulatedBadge />}
+            </span>
+          ) : (
+            <Skeleton className="h-7 w-56" />
           )
         }
+        description={a?.description}
+        actions={a && <ResumeAgentButton agent={a} onResumed={() => { void agent.refetch(); void events.refetch(); }} />}
       />
 
       {a && <PausedBanner agent={a} />}
 
-      {/* Agent information */}
       <Card className="mb-4">
         <CardBody className="pt-5">
           {!a ? (
             <LoadingState rows={2} />
           ) : (
             <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 xl:grid-cols-8">
-              <Stat label="Agent ID" value={a.id} />
-              <Stat label="Model" value={a.model} />
+              <Stat label="Agent ID" value={<span title={a.id}>{a.id}</span>} />
+              <Stat label="Model" value={model ?? '—'} hint={model ? 'from recent events' : undefined} />
               <Stat label="Registered" value={formatDateTime(a.created_at)} />
-              <Stat label="Last seen" value={formatRelative(a.last_seen_at, now)} />
+              <Stat label="Last seen" value={formatRelative(a.last_seen, now)} />
               <Stat label="Total tokens" value={formatCompact(a.total_tokens)} hint={formatInteger(a.total_tokens)} />
-              <Stat label="Est. spend" value={formatUsd(a.total_cost_usd)} />
-              <Stat label="Tool calls" value={formatInteger(a.tool_calls)} hint={`${formatPercent(a.failed_tool_calls / Math.max(1, a.tool_calls))} failed`} />
-              <Stat label="Incidents" value={a.incident_count} />
+              <Stat label="Estimated cost" value={formatUsd(a.estimated_cost)} hint="estimate" />
+              <Stat label="Recent tool calls" value={formatInteger(toolCalls.length)} hint={toolCalls.length ? `${formatPercent(failedCalls / toolCalls.length)} failed` : undefined} />
+              <Stat label="Open incidents" value={a.open_incidents} />
             </dl>
           )}
         </CardBody>
       </Card>
 
-      {/* Token & spend history derived from this agent's events */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Token consumption" description="From recent events" />
+          <CardHeader title="Token consumption" description="From the last 100 events" />
           <CardBody>
             <ChartFrame height={220} loading={events.loading} error={events.error} empty={buckets.length === 0} onRetry={events.refetch}>
-              <TimeSeriesChart data={buckets} xKey="timestamp" height={220} series={[{ key: 'tokens', label: 'Tokens', color: CHART.bronze }]} formatX={formatX} formatY={formatCompact} formatTooltipValue={formatInteger} formatTooltipLabel={formatDateTime} />
+              <TimeSeriesChart data={buckets} xKey="t" height={220} series={[{ key: 'tokens', label: 'Tokens', color: CHART.bronze }]} formatX={formatClockMs} formatY={formatCompact} formatTooltipValue={formatInteger} formatTooltipLabel={formatDateTimeMs} />
             </ChartFrame>
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Spending history" description="From recent events" />
+          <CardHeader title="Estimated spend history" description="From the last 100 events" />
           <CardBody>
             <ChartFrame height={220} loading={events.loading} error={events.error} empty={buckets.length === 0} onRetry={events.refetch}>
-              <TimeSeriesChart data={buckets} xKey="timestamp" height={220} series={[{ key: 'cost_usd', label: 'Spend', color: SERIES[2] }]} formatX={formatX} formatY={formatUsdAxis} formatTooltipValue={formatUsd} formatTooltipLabel={formatDateTime} />
+              <TimeSeriesChart data={buckets} xKey="t" height={220} series={[{ key: 'cost', label: 'Estimated cost', color: SERIES[2] }]} formatX={formatClockMs} formatY={formatUsdAxis} formatTooltipValue={(v) => `${formatUsd(v)} est.`} formatTooltipLabel={formatDateTimeMs} />
             </ChartFrame>
           </CardBody>
         </Card>
@@ -130,11 +133,11 @@ export function AgentDetailPage() {
           {events.error ? <ErrorState error={events.error} onRetry={events.refetch} /> : events.loading ? <LoadingState className="p-5" /> : <ToolCallTable events={toolCalls} />}
         </Card>
         <Card>
-          <CardHeader title="Current tasks" />
-          {a ? <AgentTaskList tasks={a.current_tasks} /> : <LoadingState className="p-5" rows={3} />}
+          <CardHeader title="Current tasks" description="Grouped from recent events by task ID" />
+          {events.error ? <ErrorState error={events.error} onRetry={events.refetch} /> : events.loading ? <LoadingState className="p-5" rows={3} /> : <AgentTaskList tasks={tasks} />}
         </Card>
         <Card className="lg:col-span-2">
-          <CardHeader title="Perils faced" description="Suspicious behaviour TokenShield caught for this agent" />
+          <CardHeader title="Perils faced" description="Suspicious behaviour TokenShield detected for this agent" />
           {incidents.error ? <ErrorState error={incidents.error} onRetry={incidents.refetch} /> : incidents.loading ? <LoadingState className="p-5" rows={3} /> : <SuspiciousBehavior incidents={agentIncidents} />}
         </Card>
         <Card>
@@ -143,7 +146,7 @@ export function AgentDetailPage() {
             {events.error ? (
               <ErrorState error={events.error} onRetry={events.refetch} />
             ) : (
-              <ActivityFeed events={errors} loading={events.loading} showAgent={false} emptyTitle="No recent errors" emptyDescription="All recent tool calls succeeded." />
+              <ActivityFeed events={errors} loading={events.loading} showAgent={false} emptyTitle="No recent errors" emptyDescription="All recent calls succeeded." />
             )}
           </div>
         </Card>

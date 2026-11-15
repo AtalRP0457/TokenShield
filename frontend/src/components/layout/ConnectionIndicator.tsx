@@ -1,30 +1,26 @@
 import { useLiveEvents } from '../../hooks/useLiveEvents';
 import { useApiQuery } from '../../hooks/useApiQuery';
-import { api } from '../../services';
-import type { FeedStatus } from '../../services/liveFeed';
+import { api, config } from '../../services';
 import { Badge } from '../ui/Badge';
-import type { Tone } from '../../lib/labels';
 
-const FEED: Record<FeedStatus, { label: string; tone: Tone; pulse?: boolean }> = {
-  connecting: { label: 'Connecting', tone: 'neutral' },
-  mock: { label: 'Live · mock', tone: 'info', pulse: true },
-  websocket: { label: 'Live · WebSocket', tone: 'success', pulse: true },
-  polling: { label: 'Live · polling', tone: 'success' },
-  offline: { label: 'Offline', tone: 'danger' },
-};
-
-/** Header pill showing API health and which live transport is in use. */
+/** Header pill: API health plus how the live feed is updating (the backend has no WebSocket, so it polls). */
 export function ConnectionIndicator() {
   const { status, statusDetail } = useLiveEvents();
   const health = useApiQuery(() => api.getHealth(), [], { refreshMs: 30_000 });
-  const apiDown = health.error !== null;
-  const meta = apiDown ? FEED.offline : FEED[status];
-  const title = apiDown ? `API health check failed: ${health.error?.message}` : statusDetail ?? `Live feed via ${status}`;
+  const seconds = (config.pollIntervalMs / 1000).toFixed(1).replace(/\.0$/, '');
 
+  if (health.error || status === 'offline') {
+    return (
+      <span title={health.error ? `API health check failed: ${health.error.message}` : statusDetail}>
+        <Badge tone="danger" dot>Offline</Badge>
+      </span>
+    );
+  }
+  if (status === 'connecting') return <Badge tone="neutral" dot>Connecting</Badge>;
   return (
-    <span title={title}>
-      <Badge tone={meta.tone} dot pulse={meta.pulse}>
-        {meta.label}
+    <span title={`Refreshing every ${seconds}s${health.data ? ` · ${health.data.environment}` : ''}`}>
+      <Badge tone={config.useMock ? 'info' : 'success'} dot pulse>
+        {config.useMock ? 'Live · mock' : 'Live'}
       </Badge>
     </span>
   );

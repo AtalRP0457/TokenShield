@@ -1,32 +1,29 @@
 /**
- * In-browser mock backend. Implements the same TokenShieldApi interface as the
- * real client, keeps state in memory, and runs a small simulator that emits
- * live events — so every page works with no backend running.
+ * In-browser mock backend that speaks the real API contract (v2).
  *
- * It also behaves like the real backend should: every event is checked against
- * the protection limits (Athena's wards), and an agent that breaks one gets an
- * incident AND is stopped. Treat `enforce()` below as reference logic for the
- * FastAPI implementation.
+ * Internally it keeps richer state (see mockTypes.ts) and runs a simulator;
+ * every public method converts that state to the exact v2 shapes in
+ * types/api.ts, so mock mode and the FastAPI backend are interchangeable.
  *
- * Nothing here persists: reload the page to reset.
+ * It also enforces the protection limits like the backend does: when an agent
+ * breaks one, it raises an incident and pauses the agent. Gemini analysis
+ * appears a few seconds after an incident, like the real backend.
+ *
+ * Nothing persists: reload the page to reset.
  */
 import type { TokenShieldApi } from '../apiClient';
 import { ApiError } from '../http';
 import { loadSettings } from '../settingsStorage';
+import type * as V2 from '../../types/api';
 import type {
   Agent,
   AgentAction,
-  AgentDetail,
   AgentEvent,
   AgentTask,
-  CostMetricPoint,
   Incident,
   IncidentType,
-  PausedBy,
   Severity,
-  SimulationScenario,
-  TokenMetricPoint,
-} from '../../types/api';
+} from './mockTypes';
 import {
   buildEvent,
   createRng,
@@ -35,13 +32,13 @@ import {
   seedAgents,
   seedEvents,
   seedIncidents,
-  seedSeries,
   seedTasks,
 } from './mockData';
 
-const HOUR = 3_600_000;
 const MAX_EVENTS = 3_000;
 const TICK_MS = 2_200;
+/** How long a new incident shows "Analyzing…" before its Gemini analysis appears. */
+const ANALYSIS_DELAY_MS = 4_000;
 
 /* ---------------- state ---------------- */
 
@@ -50,24 +47,17 @@ const agents: Agent[] = seedAgents();
 const tasks: Record<string, AgentTask[]> = seedTasks(rng);
 const events: AgentEvent[] = seedEvents(rng, agents); // newest first
 const incidents: Incident[] = seedIncidents(events);
-const { tokens: tokenSeries, cost: costSeries } = seedSeries(rng);
 let simulationRunning = true;
 let incidentSeq = 1043;
+
+/** Evidence objects captured when an incident is opened (keys depend on type). */
+const evidenceById: Record<string, Record<string, unknown>> = {};
+/** When each incident's Gemini analysis becomes available. */
+const analysisReadyAt: Record<string, number> = {};
 
 /** Per-agent streak counters used by enforce(). */
 const streaks: Record<string, { failures: AgentEvent[]; repeats: AgentEvent[] }> = {};
 const streakFor = (id: string) => (streaks[id] ??= { failures: [], repeats: [] });
-
-/* ---------------- live event bus ---------------- */
-
-type Listener = (event: AgentEvent) => void;
-const listeners = new Set<Listener>();
-
-/** Used by services/liveFeed.ts in mock mode, in place of a WebSocket. */
-export function subscribeMockEvents(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
 
 /* ---------------- helpers ---------------- */
 
@@ -75,9 +65,10 @@ const clone = <T,>(value: T): T => structuredClone(value);
 const delay = (ms = 120 + Math.random() * 280) => new Promise((r) => setTimeout(r, ms));
 const nowIso = () => new Date().toISOString();
 const sumCost = (evts: AgentEvent[]) => evts.reduce((s, e) => s + (e.cost_usd ?? 0), 0);
+const isToolEvent = (e: AgentEvent) => e.type === 'tool_call' || e.type === 'api_failure' || e.type === 'repeated_call';
 
-async function respond<T>(produce: () => T): Promise<T> {
-  await delay();
+async function respond<T>(produce: () => T, ms?: number): Promise<T> {
+  await delay(ms);
   return clone(produce());
 }
 
@@ -87,19 +78,120 @@ function findAgent(id: string): Agent {
   return agent;
 }
 
-function currentBucket<T extends { timestamp: string }>(series: T[], make: (ts: string) => T): T {
-  const hour = Math.floor(Date.now() / HOUR) * HOUR;
-  const last = series[series.length - 1];
-  if (last && Date.parse(last.timestamp) === hour) return last;
-  const fresh = make(new Date(hour).toISOString());
-  series.push(fresh);
-  if (series.length > 24) series.shift();
-  return fresh;
+function findIncident(id: string): Incident {
+  const incident = incidents.find((i) => i.id === id);
+  if (!incident) throw new ApiError(`404 Incident ${id} not found`, `/api/incidents/${id}`, 404);
+  return incident;
+}
+
+/* ---------------- converting internal state → contract v2 ---------------- */
+
+const INCIDENT_TYPE_V2: Record<IncidentType, V2.IncidentType> = {
+  execution_loop: 'SEQUENCE_LOOP',
+  repeated_tool_calls: 'REPEATED_TOOL_CALL',
+  consecutive_failures: 'CONSECUTIVE_FAILURES',
+  token_limit_exceeded: 'TOKEN_BUDGET_EXCEEDED',
+  cost_limit_exceeded: 'COST_BUDGET_EXCEEDED',
+  task_timeout: 'LONG_RUNNING_TASK',
+};
+
+const EVENT_TYPE_V2: Record<AgentEvent['type'], string> = {
+  tool_call: 'tool_call',
+  api_failure: 'tool_call',
+  repeated_call: 'tool_call',
+  token_usage: 'llm_call',
+  task_started: 'task_start',
+  task_completed: 'task_end',
+  agent_stopped: 'agent_paused',
+  agent_resumed: 'agent_resumed',
+};
+
+function toAgentV2(a: Agent): V2.Agent {
+  return {
+    id: a.id,
+    name: a.name,
+    description: a.description,
+    status: a.status === 'paused' ? 'paused' : a.status === 'idle' ? 'stopped' : 'active',
+    is_simulated: true,
+    created_at: a.created_at,
+    last_seen: a.last_seen_at,
+    total_tokens: a.total_tokens,
+    estimated_cost: +a.total_cost_usd.toFixed(4),
+    open_incidents: incidents.filter((i) => i.agent_id === a.id && i.status !== 'resolved').length,
+  };
+}
+
+function toEventV2(e: AgentEvent): V2.AgentEvent {
+  const tokens = e.tokens ?? null;
+  const input = tokens != null ? Math.round(tokens * 0.7) : null;
+  const failed = e.success === false;
+  return {
+    id: e.id,
+    agent_id: e.agent_id,
+    task_id: e.task_id ?? null,
+    event_type: EVENT_TYPE_V2[e.type] ?? e.type,
+    tool_name: e.tool_name ?? null,
+    model: agents.find((a) => a.id === e.agent_id)?.model ?? null,
+    input_tokens: input,
+    output_tokens: tokens != null && input != null ? tokens - input : null,
+    total_tokens: tokens,
+    estimated_cost: e.cost_usd ?? null,
+    success: e.success ?? null,
+    error_message: failed ? (e.message.split(': ').slice(1).join(': ') || e.message) : null,
+    duration_ms: e.latency_ms ?? null,
+    is_simulated: true,
+    timestamp: e.timestamp,
+  };
+}
+
+function evidenceFor(i: Incident): Record<string, unknown> {
+  if (evidenceById[i.id]) return evidenceById[i.id];
+  const related = events.filter((e) => i.related_event_ids.includes(e.id));
+  const failed = related.filter((e) => e.success === false);
+  const tool = related.find((e) => e.tool_name)?.tool_name;
+  return {
+    ...(tool ? { tool_name: tool } : {}),
+    related_events: i.related_event_ids.length,
+    failed_calls: failed.length,
+    ...(failed[0] ? { last_error: toEventV2(failed[0]).error_message } : {}),
+  };
+}
+
+function toIncidentV2(i: Incident): V2.Incident {
+  const type = INCIDENT_TYPE_V2[i.type];
+  const ready = Date.now() >= (analysisReadyAt[i.id] ?? 0);
+  const evidence = evidenceFor(i);
+  return {
+    id: i.id,
+    agent_id: i.agent_id,
+    agent_name: i.agent_name,
+    task_id: events.find((e) => i.related_event_ids.includes(e.id))?.task_id ?? null,
+    incident_type: type,
+    severity: i.severity === 'low' ? 'medium' : i.severity,
+    description: i.description,
+    evidence,
+    repeated_calls: type === 'REPEATED_TOOL_CALL' || type === 'SEQUENCE_LOOP' ? Number(evidence.repeated_calls ?? i.related_event_ids.length) : null,
+    estimated_waste: +i.estimated_waste_usd.toFixed(4),
+    gemini_analysis:
+      ready && i.gemini_explanation
+        ? {
+            summary: i.title,
+            probable_root_cause: i.gemini_explanation,
+            severity: i.severity,
+            confidence: 0.82 + ((i.id.charCodeAt(i.id.length - 1) % 7) / 50),
+            evidence: [i.description],
+            recommended_actions: i.recommended_actions,
+            estimated_wasted_resources: `About $${i.estimated_waste_usd.toFixed(2)} (estimated) in tokens and tool calls`,
+            additional_investigation: ['Check whether the same pattern appeared in earlier runs of this task.'],
+          }
+        : null,
+    status: i.status,
+    created_at: i.detected_at,
+  };
 }
 
 /* ---------------- aggregates ---------------- */
 
-/** Apply an event to every aggregate, exactly like a backend would. */
 function applyEvent(event: AgentEvent): { tokensBefore: number; task?: AgentTask } {
   events.unshift(event);
   if (events.length > MAX_EVENTS) events.length = MAX_EVENTS;
@@ -112,7 +204,7 @@ function applyEvent(event: AgentEvent): { tokensBefore: number; task?: AgentTask
     agent.last_seen_at = event.timestamp;
     agent.total_tokens += event.tokens ?? 0;
     agent.total_cost_usd = +(agent.total_cost_usd + (event.cost_usd ?? 0)).toFixed(4);
-    if (event.type === 'tool_call' || event.type === 'api_failure' || event.type === 'repeated_call') {
+    if (isToolEvent(event)) {
       agent.tool_calls += 1;
       if (event.success === false) agent.failed_tool_calls += 1;
     }
@@ -124,28 +216,15 @@ function applyEvent(event: AgentEvent): { tokensBefore: number; task?: AgentTask
       if (event.tool_name) task.tool_calls += 1;
     }
   }
-
-  if (event.tokens) {
-    const bucket = currentBucket<TokenMetricPoint>(tokenSeries, (timestamp) => ({ timestamp, input_tokens: 0, output_tokens: 0 }));
-    const out = Math.round(event.tokens * 0.3);
-    bucket.input_tokens += event.tokens - out;
-    bucket.output_tokens += out;
-  }
-  if (event.cost_usd) {
-    const bucket = currentBucket<CostMetricPoint>(costSeries, (timestamp) => ({ timestamp, cost_usd: 0, wasted_cost_usd: 0 }));
-    bucket.cost_usd = +(bucket.cost_usd + event.cost_usd).toFixed(4);
-    if (event.type === 'repeated_call' || event.success === false) {
-      bucket.wasted_cost_usd = +(bucket.wasted_cost_usd + event.cost_usd).toFixed(4);
-    }
-  }
-
-  listeners.forEach((l) => l(clone(event)));
   return { tokensBefore, task };
 }
 
-function openIncident(agent: Agent, type: IncidentType, severity: Severity, title: string, description: string, waste: number, related: AgentEvent[], explanation: string, actions: string[], stopped: boolean) {
+function openIncident(
+  agent: Agent, type: IncidentType, severity: Severity, title: string, description: string,
+  waste: number, related: AgentEvent[], explanation: string, actions: string[], evidence: Record<string, unknown>,
+) {
   const incident: Incident = {
-    id: `inc_${incidentSeq++}`,
+    id: `INC-${(incidentSeq++).toString(16).toUpperCase().padStart(6, '0')}`,
     agent_id: agent.id,
     agent_name: agent.name,
     type,
@@ -153,33 +232,33 @@ function openIncident(agent: Agent, type: IncidentType, severity: Severity, titl
     status: 'open',
     title,
     description,
-    estimated_waste_usd: +waste.toFixed(2),
+    estimated_waste_usd: +waste.toFixed(4),
     detected_at: nowIso(),
     resolved_at: null,
     gemini_explanation: explanation,
     recommended_actions: actions,
     related_event_ids: related.map((e) => e.id),
-    agent_stopped: stopped,
+    agent_stopped: true,
   };
   incidents.unshift(incident);
   agent.incident_count += 1;
-  const bucket = currentBucket<CostMetricPoint>(costSeries, (timestamp) => ({ timestamp, cost_usd: 0, wasted_cost_usd: 0 }));
-  bucket.wasted_cost_usd = +(bucket.wasted_cost_usd + waste).toFixed(2);
+  evidenceById[incident.id] = evidence;
+  analysisReadyAt[incident.id] = Date.now() + ANALYSIS_DELAY_MS;
   return incident;
 }
 
 /* ---------------- pause / resume ---------------- */
 
-function pause(agent: Agent, by: PausedBy, reason: string) {
+function pause(agent: Agent, reason: string) {
   if (agent.status === 'paused') return;
   agent.status = 'paused';
-  agent.paused_by = by;
+  agent.paused_by = 'tokenshield';
   agent.pause_reason = reason;
   tasks[agent.id]?.forEach((t) => t.status === 'running' && (t.status = 'stopped'));
   delete streaks[agent.id];
   applyEvent({
     id: nextEventId(), agent_id: agent.id, agent_name: agent.name, type: 'agent_stopped', timestamp: nowIso(),
-    message: by === 'tokenshield' ? `TokenShield stopped this agent: ${reason}` : `Paused from the dashboard: ${reason}`,
+    message: `TokenShield paused this agent: ${reason}`,
   });
 }
 
@@ -196,18 +275,11 @@ function resume(agent: Agent) {
   });
 }
 
-/* ---------------- enforcement (the "backend" brain) ---------------- */
+/* ---------------- enforcement (mirrors the backend's detection) ---------------- */
 
-/**
- * Record an event, then check it against the protection limits.
- * Returns what TokenShield tells the agent to do next.
- */
 function ingest(event: AgentEvent): { action: AgentAction; reason: string | null } {
   const agent = agents.find((a) => a.id === event.agent_id);
-  if (agent?.status === 'paused') {
-    // A stopped agent that keeps reporting is told to stop again.
-    return { action: 'stop', reason: agent.pause_reason };
-  }
+  if (agent?.status === 'paused') return { action: 'stop', reason: agent.pause_reason };
   const { tokensBefore, task } = applyEvent(event);
   if (!agent) return { action: 'continue', reason: null };
   return enforce(agent, event, tokensBefore, task);
@@ -216,54 +288,51 @@ function ingest(event: AgentEvent): { action: AgentAction; reason: string | null
 function enforce(agent: Agent, event: AgentEvent, tokensBefore: number, task?: AgentTask): { action: AgentAction; reason: string | null } {
   const limits = loadSettings();
   const s = streakFor(agent.id);
-  const isCall = event.type === 'tool_call' || event.type === 'api_failure' || event.type === 'repeated_call';
 
-  if (isCall) {
+  if (isToolEvent(event)) {
     if (event.success === false) s.failures.push(event);
     else s.failures = [];
     if (event.type === 'repeated_call') s.repeats.push(event);
     else s.repeats = [];
   }
 
-  // Charybdis: the same call repeated too many times.
   if (s.repeats.length >= limits.maxRepeatedToolCalls) {
     const tool = event.tool_name ?? 'a tool';
     const evts = [...s.repeats];
-    const reason = `${tool} repeated ${evts.length}× with identical arguments (limit ${limits.maxRepeatedToolCalls})`;
-    openIncident(agent, 'execution_loop', 'critical', `Execution loop on ${tool}: agent stopped`,
-      `${agent.name} kept calling ${tool} with identical arguments. TokenShield stopped it at the configured limit.`,
-      sumCost(evts) + 2.5, evts,
-      `The agent retries ${tool} after each identical result instead of revising its plan. Every iteration re-sends the full conversation history, so cost grows with each loop. Stopping it now prevents the loop from running until the context window fills.`,
-      ['Review the task that was running and fix the step that keeps failing.', `Keep ${tool} capped at ${limits.maxRepeatedToolCalls} identical calls per task.`, 'Resume the agent once the cause is fixed.'],
-      true);
-    pause(agent, 'tokenshield', reason);
+    const failed = evts.filter((e) => e.success === false);
+    const reason = `${tool} repeated ${evts.length}× with identical arguments`;
+    openIncident(agent, 'repeated_tool_calls', 'high', `${tool} called ${evts.length} times with identical arguments`,
+      `Tool '${tool}' was called ${evts.length} times in a row with identical arguments (${failed.length} failed).`,
+      sumCost(evts) + 0.4, evts,
+      `The agent retries ${tool} after each identical result instead of revising its plan. Every retry re-sends the conversation history, so cost grows with each loop.`,
+      ['Review the step that keeps failing before resuming the agent.', `Cap ${tool} at ${limits.maxRepeatedToolCalls} identical calls per task.`, 'Add backoff, or change the arguments between retries.'],
+      { tool_name: tool, repeated_calls: evts.length, failed_calls: failed.length, last_error: failed[0] ? toEventV2(failed[0]).error_message : null });
+    pause(agent, reason);
     return { action: 'stop', reason };
   }
 
-  // Poseidon's storm: too many failures in a row.
   if (s.failures.length >= limits.maxConsecutiveFailures) {
     const evts = [...s.failures];
-    const reason = `${evts.length} consecutive failures (limit ${limits.maxConsecutiveFailures})`;
-    openIncident(agent, 'consecutive_failures', 'high', `${evts.length} failures in a row: agent stopped`,
-      `${agent.name} failed ${evts.length} tool or API calls in a row. TokenShield stopped it before it kept retrying.`,
-      sumCost(evts) + 0.6, evts,
-      'An upstream dependency is failing and the agent retries immediately without backing off, spending tokens on planning steps that cannot succeed.',
+    const reason = `${evts.length} consecutive failures`;
+    openIncident(agent, 'consecutive_failures', 'high', `${evts.length} failures in a row`,
+      `${agent.name} failed ${evts.length} tool or API calls in a row.`,
+      sumCost(evts) + 0.2, evts,
+      'An upstream dependency is failing and the agent retries immediately without backing off, spending tokens on steps that cannot succeed.',
       ['Check the upstream service the agent depends on.', 'Add exponential backoff with jitter to the failing tool.', 'Resume the agent once the service is healthy.'],
-      true);
-    pause(agent, 'tokenshield', reason);
+      { consecutive_failures: evts.length, last_error: toEventV2(evts[evts.length - 1]).error_message, tool_name: evts[evts.length - 1].tool_name ?? null });
+    pause(agent, reason);
     return { action: 'stop', reason };
   }
 
-  // Aeolus' winds: this event pushed a task over its token budget.
   if (task && task.status === 'running' && tokensBefore <= limits.maxTokensPerTask && task.tokens_used > limits.maxTokensPerTask) {
-    const reason = `task “${task.name}” used ${task.tokens_used.toLocaleString('en-US')} tokens (limit ${limits.maxTokensPerTask.toLocaleString('en-US')})`;
-    openIncident(agent, 'token_limit_exceeded', 'high', `Token budget exceeded on “${task.name}”: agent stopped`,
-      `${agent.name} went past the per-task token budget. TokenShield stopped it before it could spend more.`,
-      (event.cost_usd ?? 0) * 0.8 + 1.2, [event],
+    const reason = `task used ${task.tokens_used.toLocaleString('en-US')} tokens`;
+    openIncident(agent, 'token_limit_exceeded', 'high', `Token budget exceeded on “${task.name}”`,
+      `Task “${task.name}” used ${task.tokens_used.toLocaleString('en-US')} tokens, over the ${limits.maxTokensPerTask.toLocaleString('en-US')}-token budget.`,
+      (event.cost_usd ?? 0) * 0.8 + 0.3, [event],
       'Large documents were placed directly into the prompt instead of being chunked and retrieved, so each completion used almost the full context window.',
-      ['Chunk documents and retrieve only the relevant passages.', 'Keep the per-task token budget in Athena’s wards.', 'Resume the agent after reducing prompt size.'],
-      true);
-    pause(agent, 'tokenshield', reason);
+      ['Chunk documents and retrieve only the relevant passages.', 'Keep the per-task token budget enabled.', 'Resume the agent after reducing prompt size.'],
+      { task_name: task.name, tokens_used: task.tokens_used, token_budget: limits.maxTokensPerTask });
+    pause(agent, reason);
     return { action: 'stop', reason };
   }
 
@@ -278,9 +347,8 @@ function tick() {
   if (live.length === 0) return;
   const agent = rng.pick(live);
 
-  // Healthy agents finish their tasks before hitting the budget: recycle any
-  // running task past 60% of the limit (task_completed → fresh task_started),
-  // so background traffic never trips the token rule on its own.
+  // Healthy agents finish tasks before hitting the budget, so background
+  // traffic never trips the token rule on its own.
   const limit = loadSettings().maxTokensPerTask;
   for (const task of tasks[agent.id] ?? []) {
     if (task.status !== 'running' || task.tokens_used <= limit * 0.6) continue;
@@ -292,186 +360,163 @@ function tick() {
   ingest(buildEvent(rng, agent, Date.now()));
 }
 
-const perilName: Record<SimulationScenario, string> = {
-  execution_loop: 'Charybdis',
-  failure_storm: "Poseidon's storm",
-  token_spike: "Aeolus' winds",
-};
-
-/**
- * Scenarios only feed events in. Detection and stopping are done by enforce(),
- * exactly as they would be for a real agent.
- */
-function runScenario(scenario: SimulationScenario): string {
+/** Scenarios feed events in; detection and pausing happen in enforce(), as for a real agent. */
+function runScenario(scenario: V2.SimulationScenario) {
   const pickAgent = (preferred: string) =>
     agents.find((a) => a.id === preferred && a.status !== 'paused') ??
     agents.find((a) => a.status === 'active' || a.status === 'error');
 
-  const agent = pickAgent(
-    scenario === 'execution_loop' ? 'agt_codereview' : scenario === 'failure_storm' ? 'agt_support' : 'agt_research',
-  );
-  if (!agent) return 'No running agent to target. Resume an agent first.';
-
+  const preferred: Record<V2.SimulationScenario, string> = {
+    repeating: 'agt_codereview', sequence_loop: 'agt_pipeline', failing: 'agt_support', token_heavy: 'agt_research', healthy: 'agt_sales',
+  };
+  const agent = pickAgent(preferred[scenario]);
+  if (!agent) return;
   const limits = loadSettings();
-  const tool = profileById(agent.id).tools[0];
+  const tools = profileById(agent.id).tools;
   let result: ReturnType<typeof ingest> = { action: 'continue', reason: null };
 
-  if (scenario === 'execution_loop') {
+  if (scenario === 'repeating') {
     for (let i = 0; i < limits.maxRepeatedToolCalls + 5 && result.action === 'continue'; i++) {
-      result = ingest({ ...buildEvent(rng, agent, Date.now() + i, 'repeated_call'), tool_name: tool, message: `${tool} called again with identical arguments` });
+      result = ingest({ ...buildEvent(rng, agent, Date.now() + i, 'repeated_call'), tool_name: tools[0], success: false, message: `${tools[0]} failed: HTTP 503` });
     }
-  } else if (scenario === 'failure_storm') {
+  } else if (scenario === 'failing') {
     for (let i = 0; i < limits.maxConsecutiveFailures + 5 && result.action === 'continue'; i++) {
       result = ingest(buildEvent(rng, agent, Date.now() + i, 'api_failure'));
     }
-  } else {
+  } else if (scenario === 'token_heavy') {
     const agentTasks = tasks[agent.id] ?? [];
     const task = agentTasks.find((t) => t.status === 'running') ?? agentTasks[0];
-    if (task) task.status = 'running';
+    if (task) {
+      task.status = 'running';
+      if (task.tokens_used > limits.maxTokensPerTask) task.tokens_used = 0;
+    }
     const tokens = Math.max(0, limits.maxTokensPerTask - (task?.tokens_used ?? 0)) + 60_000;
-    const cost = +((tokens / 1000) * profileById(agent.id).usdPer1kTokens).toFixed(4);
-    result = ingest({
+    ingest({
       ...buildEvent(rng, agent, Date.now(), 'token_usage'),
-      task_id: task?.id ?? null, tokens, cost_usd: cost,
+      task_id: task?.id ?? null, tokens, cost_usd: +((tokens / 1000) * profileById(agent.id).usdPer1kTokens).toFixed(4),
       message: `LLM completion · ${tokens.toLocaleString('en-US')} tokens`,
     });
+  } else if (scenario === 'sequence_loop') {
+    // A → B → A → B … : each call differs from the last, so it's not a "repeat",
+    // but the sequence is a loop (Charybdis).
+    const [a, b] = [tools[0], tools[1] ?? tools[0]];
+    const evts: AgentEvent[] = [];
+    for (let i = 0; i < 8; i++) {
+      const e = { ...buildEvent(rng, agent, Date.now() + i, 'tool_call'), tool_name: i % 2 ? b : a, success: true, message: `${i % 2 ? b : a} completed` };
+      ingest(e);
+      evts.push(e);
+    }
+    openIncident(agent, 'execution_loop', 'critical', `Sequence loop: ${a} → ${b} repeating`,
+      `${agent.name} cycled through ${a} → ${b} ${evts.length / 2} times without making progress.`,
+      sumCost(evts) + 0.6, evts,
+      `Each step succeeds, but the plan never advances: the output of ${b} sends the agent back to ${a}. No single call looks wrong, which is why this kind of loop is easy to miss.`,
+      ['Add a step counter or progress check to the planning loop.', `Detect when ${a} → ${b} repeats with the same inputs and break out.`, 'Resume the agent after adding a max-iterations guard.'],
+      { sequence: [a, b], cycles: evts.length / 2, repeated_calls: evts.length });
+    pause(agent, `sequence loop ${a} → ${b}`);
+  } else {
+    for (let i = 0; i < 3; i++) ingest({ ...buildEvent(rng, agent, Date.now() + i, 'tool_call'), success: true });
   }
-
-  return result.action === 'stop'
-    ? `${perilName[scenario]} caught on ${agent.name}. TokenShield stopped the agent.`
-    : `${perilName[scenario]} sent to ${agent.name}, but no limit was reached. Check Athena's wards.`;
 }
 
 if (typeof window !== 'undefined') {
   window.setInterval(tick, TICK_MS);
 }
 
-/* ---------------- API implementation ---------------- */
+/* ---------------- API implementation (contract v2) ---------------- */
 
 export const mockApi: TokenShieldApi = {
-  registerAgent: (body) =>
-    respond(() => {
-      const agent: Agent = {
-        id: `agt_${Math.random().toString(36).slice(2, 8)}`,
-        name: body.name,
-        description: body.description ?? '',
-        model: body.model,
-        status: 'idle',
-        created_at: nowIso(),
-        last_seen_at: nowIso(),
-        total_tokens: 0,
-        total_cost_usd: 0,
-        tool_calls: 0,
-        failed_tool_calls: 0,
-        incident_count: 0,
-        paused_by: null,
-        pause_reason: null,
-      };
-      agents.push(agent);
-      return agent;
+  getOverview: () =>
+    respond((): V2.MetricsOverview => ({
+      active_agents: agents.filter((a) => a.status === 'active' || a.status === 'error').length,
+      total_tokens: agents.reduce((s, a) => s + a.total_tokens, 0),
+      estimated_cost: +agents.reduce((s, a) => s + a.total_cost_usd, 0).toFixed(4),
+      potential_waste: +incidents.reduce((s, i) => s + i.estimated_waste_usd, 0).toFixed(4),
+      detected_loops: incidents.filter((i) => i.type === 'execution_loop' || i.type === 'repeated_tool_calls').length,
+      active_incidents: incidents.filter((i) => i.status !== 'resolved').length,
+      cost_is_estimate: true,
+    })),
+
+  getTimeseries: (minutes) =>
+    respond((): V2.TimeseriesResponse => {
+      const since = Date.now() - minutes * 60_000;
+      const buckets = new Map<number, V2.TimeseriesPoint>();
+      for (const e of events) {
+        const t = Date.parse(e.timestamp);
+        if (t < since) break; // events are newest first
+        const minute = Math.floor(t / 60_000) * 60_000;
+        // Like the real API: no 'Z' suffix on aggregate timestamps (still UTC).
+        const point = buckets.get(minute) ?? { time: new Date(minute).toISOString().slice(0, 19), calls: 0, tokens: 0, cost: 0, failures: 0 };
+        if (isToolEvent(e)) point.calls += 1;
+        if (e.success === false) point.failures += 1;
+        point.tokens += e.tokens ?? 0;
+        point.cost = +(point.cost + (e.cost_usd ?? 0)).toFixed(6);
+        buckets.set(minute, point);
+      }
+      const series = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);
+      return { series, is_estimate: true, source: 'mock_in_browser' };
     }),
 
-  ingestEvent: (body) =>
-    respond(() => {
-      const agent = findAgent(body.agent_id);
-      const event: AgentEvent = { ...body, id: nextEventId(), agent_name: agent.name };
-      const { action, reason } = ingest(event);
-      return { event, action, reason };
-    }),
+  getAgents: () => respond(() => agents.map(toAgentV2)),
 
-  getAgents: () => respond(() => agents),
+  getAgent: (id) => respond(() => toAgentV2(findAgent(id))),
 
-  getAgent: (id) =>
-    respond((): AgentDetail => {
-      const agent = findAgent(id);
-      return { ...agent, current_tasks: tasks[id] ?? [] };
-    }),
-
-  getAgentEvents: (id) =>
+  getAgentEvents: (id, limit = 100) =>
     respond(() => {
       findAgent(id);
-      return events.filter((e) => e.agent_id === id).slice(0, 200);
-    }),
-
-  pauseAgent: (id, body) =>
-    respond(() => {
-      const agent = findAgent(id);
-      pause(agent, 'user', body.reason?.trim() || 'Paused from the dashboard');
-      return agent;
+      return events.filter((e) => e.agent_id === id).slice(0, limit).map(toEventV2);
     }),
 
   resumeAgent: (id) =>
-    respond(() => {
+    respond((): V2.ResumeAgentResponse => {
       const agent = findAgent(id);
       resume(agent);
-      return agent;
+      return { agent_id: agent.id, status: 'active' };
     }),
 
-  getOverview: () =>
-    respond(() => {
-      const sum = (fn: (a: Agent) => number) => agents.reduce((s, a) => s + fn(a), 0);
-      return {
-        active_agents: agents.filter((a) => a.status === 'active' || a.status === 'error').length,
-        total_agents: agents.length,
-        total_tokens: sum((a) => a.total_tokens),
-        total_cost_usd: +sum((a) => a.total_cost_usd).toFixed(2),
-        wasted_cost_usd: +incidents.reduce((s, i) => s + i.estimated_waste_usd, 0).toFixed(2),
-        loops_detected: incidents.filter((i) => i.type === 'execution_loop').length,
-        active_incidents: incidents.filter((i) => i.status !== 'resolved').length,
-        successful_tool_calls: sum((a) => a.tool_calls - a.failed_tool_calls),
-        failed_tool_calls: sum((a) => a.failed_tool_calls),
-      };
-    }),
+  getRecentEvents: (limit = 50) => respond(() => events.slice(0, limit).map(toEventV2), 60),
 
-  getTokenMetrics: () => respond(() => tokenSeries),
-  getCostMetrics: () => respond(() => costSeries),
+  getIncidents: (status) =>
+    respond(() => incidents.filter((i) => !status || i.status === status).map(toIncidentV2)),
 
-  getAgentMetrics: () =>
-    respond(() =>
-      agents.map((a) => ({
-        agent_id: a.id,
-        agent_name: a.name,
-        total_tokens: a.total_tokens,
-        total_cost_usd: a.total_cost_usd,
-        successful_tool_calls: a.tool_calls - a.failed_tool_calls,
-        failed_tool_calls: a.failed_tool_calls,
-      })),
-    ),
-
-  getIncidents: () => respond(() => incidents),
-
-  getIncident: (id) =>
-    respond(() => {
-      const incident = incidents.find((i) => i.id === id);
-      if (!incident) throw new ApiError(`404 Incident ${id} not found`, `/api/incidents/${id}`, 404);
-      return incident;
-    }),
+  getIncident: (id) => respond(() => toIncidentV2(findIncident(id))),
 
   updateIncident: (id, body) =>
     respond(() => {
-      const incident = incidents.find((i) => i.id === id);
-      if (!incident) throw new ApiError(`404 Incident ${id} not found`, `/api/incidents/${id}`, 404);
+      const incident = findIncident(id);
       incident.status = body.status;
       incident.resolved_at = body.status === 'resolved' ? nowIso() : null;
-      return incident;
+      return toIncidentV2(incident);
     }),
 
-  startSimulation: () =>
+  analyzeIncident: (id) =>
     respond(() => {
+      const incident = findIncident(id);
+      incident.gemini_explanation ??=
+        'The agent kept repeating work that could not succeed in its current state. The pattern matches a missing guard in its retry or planning loop rather than a one-off failure.';
+      if (incident.recommended_actions.length === 0) incident.recommended_actions = ['Add a retry limit to the failing step.'];
+      analysisReadyAt[incident.id] = 0;
+      return toIncidentV2(incident);
+    }, 2_500),
+
+  startSimulation: () =>
+    respond((): V2.StartSimulationResponse => {
       simulationRunning = true;
-      return { running: true, message: 'Simulation started' };
+      return { started: ['healthy', 'repeating', 'token_heavy', 'failing', 'sequence_loop'], simulated: true };
     }),
 
   stopSimulation: () =>
-    respond(() => {
+    respond((): V2.StopSimulationResponse => {
       simulationRunning = false;
-      return { running: false, message: 'Simulation stopped' };
+      return { stopped: true };
     }),
 
-  triggerSimulation: ({ scenario }) =>
-    respond(() => ({ running: simulationRunning, message: runScenario(scenario) })),
+  triggerSimulation: (scenario) =>
+    respond((): V2.TriggerSimulationResponse => {
+      runScenario(scenario);
+      return { started: scenario, simulated: true };
+    }),
 
-  getHealth: () => respond(() => ({ status: 'ok' as const, version: 'mock' })),
+  getHealth: () => respond(() => ({ status: 'ok', environment: 'mock' })),
 };
 
 /** Mock-only: lets the UI show the simulator's initial state without an API call. */

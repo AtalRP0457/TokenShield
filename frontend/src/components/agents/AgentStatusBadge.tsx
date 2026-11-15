@@ -1,13 +1,13 @@
 import { ShieldX } from 'lucide-react';
-import type { AgentStatus, PausedBy } from '../../types/api';
+import type { AgentStatus } from '../../types/api';
 import { AGENT_STATUS } from '../../lib/labels';
 import { Badge } from '../ui/Badge';
 
-export function AgentStatusBadge({ status, pausedBy }: { status: AgentStatus; pausedBy?: PausedBy | null }) {
-  if (status === 'paused' && pausedBy === 'tokenshield') {
+export function AgentStatusBadge({ status }: { status: AgentStatus }) {
+  if (status === 'paused') {
     return (
       <Badge tone="critical">
-        <ShieldX className="size-3" /> Stopped by TokenShield
+        <ShieldX className="size-3" /> Paused by TokenShield
       </Badge>
     );
   }
