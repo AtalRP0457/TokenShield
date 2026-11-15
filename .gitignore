@@ -1,0 +1,16 @@
+# secrets - never commit these
+.env
+.env.*
+!.env.example
+*.env
+tiger-cloud-*-credentials.*
+
+# local database and environment
+*.db
+venv/
+.venv/
+
+# python junk
+__pycache__/
+*.pyc
+.pytest_cache/

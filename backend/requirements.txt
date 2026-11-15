@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic>=2
+sqlalchemy>=2
+psycopg2-binary
+google-genai
+httpx
+requests
+pytest
+python-dotenv
