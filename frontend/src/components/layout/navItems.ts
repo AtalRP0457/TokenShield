@@ -1,4 +1,4 @@
-import { Eye, ScrollText, Sailboat, ShieldHalf, Tornado, type LucideIcon } from 'lucide-react';
+import { Eye, Plug, ScrollText, Sailboat, ShieldHalf, Tornado, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
   to: string;
@@ -15,4 +15,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/incidents', label: 'Perils', hint: 'Incidents', icon: Tornado },
   { to: '/activity', label: "Ship's log", hint: 'Live activity', icon: ScrollText },
   { to: '/settings', label: "Athena's wards", hint: 'Protection', icon: ShieldHalf },
+  { to: '/connect', label: 'Summon a hero', hint: 'Connect agent', icon: Plug },
 ];

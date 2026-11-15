@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Bot, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bot, Plug, RefreshCw } from 'lucide-react';
 import { api } from '../services';
 import { useApiQuery } from '../hooks/useApiQuery';
 import type { AgentStatus } from '../types/api';
@@ -47,7 +48,14 @@ export function AgentsPage() {
       <PageHeader
         title="Heroes"
         description="Every agent sailing under the aegis. Select one to follow its voyage."
-        actions={<Button size="sm" icon={RefreshCw} loading={agents.fetching && !agents.loading} onClick={() => void agents.refetch()}>Refresh</Button>}
+        actions={
+          <>
+            <Button size="sm" icon={RefreshCw} loading={agents.fetching && !agents.loading} onClick={() => void agents.refetch()}>Refresh</Button>
+            <Link to="/connect" className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-bronze px-2.5 text-xs font-medium text-canvas transition-colors hover:bg-bronze-soft">
+              <Plug className="size-3.5" /> Connect an agent
+            </Link>
+          </>
+        }
       />
       <Card>
         <div className="flex flex-col gap-2 border-b border-line p-3 sm:flex-row sm:items-center">
@@ -67,7 +75,8 @@ export function AgentsPage() {
         ) : agents.loading ? (
           <LoadingState rows={6} className="p-4" />
         ) : agents.data!.length === 0 ? (
-          <EmptyState icon={Bot} title="No agents registered" description="Agents appear here once they send events to TokenShield. Start a simulation to add demo agents." />
+          <EmptyState icon={Bot} title="No agents registered" description="Agents appear here once they send events to TokenShield. Start a simulation, or connect your own agent."
+            action={<Link to="/connect" className="text-sm text-accent hover:underline">Connect an agent</Link>} />
         ) : visible.length === 0 ? (
           <EmptyState
             icon={Bot}

@@ -107,7 +107,7 @@ export function DashboardPage() {
           <CardBody>{tsFrame(<SpendChart data={points} height={260} />, 260)}</CardBody>
         </Card>
         <Card>
-          <CardHeader title="Estimated spend by agent" description="Lifetime, all costs are estimates" />
+          <CardHeader title="Estimated spend by agent" description="Lifetime, all costs are estimates" actions={<Link to="/agents" className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg">View heroes <ArrowRight className="size-3" /></Link>} />
           <CardBody>
             <ChartFrame height={260} loading={agents.loading} error={agents.error} empty={!agents.data?.length} onRetry={agents.refetch} emptyMessage="No agents registered yet.">
               <SpendByAgentChart data={agents.data ?? []} />
@@ -115,7 +115,7 @@ export function DashboardPage() {
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Tool calls" description={`Successful vs failed, ${step}`} />
+          <CardHeader title="Tool calls" description={`Successful vs failed, ${step}`} actions={<Link to="/activity" className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg">Ship's log <ArrowRight className="size-3" /></Link>} />
           <CardBody>{tsFrame(<ToolCallOutcomeChart data={points} height={222} />, 260)}</CardBody>
         </Card>
       </div>

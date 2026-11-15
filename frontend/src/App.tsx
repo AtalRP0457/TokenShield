@@ -10,6 +10,7 @@ import { IncidentDetailPage } from './pages/IncidentDetailPage';
 import { ActivityPage } from './pages/ActivityPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ConnectAgentPage } from './pages/ConnectAgentPage';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
               <Route path="incidents/:incidentId" element={<IncidentDetailPage />} />
               <Route path="activity" element={<ActivityPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="connect" element={<ConnectAgentPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>
