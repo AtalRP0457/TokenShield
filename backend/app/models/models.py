@@ -62,3 +62,15 @@ class Incident(Base):
     status: Mapped[str] = mapped_column(String, default="open")  # open | acknowledged | resolved
     notified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AgentGuard(Base):
+    """Per-hero overrides of the global detection limits (null = use the global default).
+    A separate table so create_all adds it to existing databases without a migration."""
+    __tablename__ = "agent_guards"
+    agent_id: Mapped[str] = mapped_column(String, primary_key=True)
+    max_task_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_task_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_repeated_calls: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_consecutive_failures: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

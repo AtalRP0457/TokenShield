@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { SimulationToast } from './Toast';
+import { PerilAlerts } from './PerilAlerts';
 
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false);
@@ -16,6 +17,7 @@ export function AppLayout() {
         </main>
       </div>
       <SimulationToast />
+      <PerilAlerts />
     </div>
   );
 }

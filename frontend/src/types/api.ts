@@ -150,6 +150,8 @@ export interface GeminiAnalysis {
   recommended_actions: string[];
   estimated_wasted_resources: string;
   additional_investigation: string[];
+  /** 2–3 sentences anyone can follow. Missing on analyses made before this field existed. */
+  plain_explanation?: string;
 }
 
 /** GET /api/incidents?status=…  (newest first) ; GET /api/incidents/{id} */
@@ -203,4 +205,37 @@ export interface StopSimulationResponse {
 export interface HealthResponse {
   status: string;
   environment: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Per-hero budgets, Oracle, alert channels                            */
+/* ------------------------------------------------------------------ */
+
+export interface GuardValues {
+  max_task_tokens: number | null;
+  max_task_cost: number | null;
+  max_repeated_calls: number | null;
+  max_consecutive_failures: number | null;
+}
+
+/** GET/PUT /api/agents/{id}/guards — null means "use the global default". */
+export interface AgentGuards extends GuardValues {
+  agent_id: string;
+  defaults: { max_task_tokens: number; max_task_cost: number; max_repeated_calls: number; max_consecutive_failures: number };
+}
+
+/** POST /api/oracle/ask */
+export interface OracleAnswer {
+  answer: string;
+  key_points: string[];
+  next_step: string;
+  source: 'gemini' | 'rules';
+}
+
+/** GET /api/notifications/status */
+export interface NotificationStatus {
+  discord: boolean;
+  slack: boolean;
+  email: boolean;
+  gemini: boolean;
 }

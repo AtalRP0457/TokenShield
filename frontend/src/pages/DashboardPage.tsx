@@ -19,6 +19,8 @@ import { SpendChart } from '../components/charts/SpendChart';
 import { SpendByAgentChart } from '../components/charts/SpendByAgentChart';
 import { ToolCallOutcomeChart } from '../components/charts/ToolCallOutcomeChart';
 import { ActivityFeed } from '../components/activity/ActivityFeed';
+import { SavingsBanner } from '../components/dashboard/SavingsBanner';
+import { CostLeaderboard } from '../components/dashboard/CostLeaderboard';
 
 /** The backend asks clients to poll every 2–3 s. */
 const POLL_MS = 3_000;
@@ -97,6 +99,8 @@ export function DashboardPage() {
         <div className="mb-6"><KpiGrid data={overview.data} loading={overview.loading} totalAgents={agents.data?.length} /></div>
       )}
 
+      <SavingsBanner incidents={incidents.data} loading={incidents.loading} />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="Token consumption" description={chartNote} />
@@ -119,6 +123,17 @@ export function DashboardPage() {
           <CardBody>{tsFrame(<ToolCallOutcomeChart data={points} height={222} />, 260)}</CardBody>
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader
+          title="Costliest heroes"
+          description="Who's burning the most money (estimated), and how much their perils wasted"
+          actions={<Link to="/agents" className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg">All heroes <ArrowRight className="size-3" /></Link>}
+        />
+        <CardBody>
+          {agents.error ? <ErrorState error={agents.error} onRetry={agents.refetch} /> : agents.loading ? <LoadingState rows={4} /> : <CostLeaderboard agents={agents.data ?? []} incidents={incidents.data ?? []} />}
+        </CardBody>
+      </Card>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-2">

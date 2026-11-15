@@ -1,5 +1,9 @@
 import type {
   Agent,
+  AgentGuards,
+  GuardValues,
+  NotificationStatus,
+  OracleAnswer,
   AgentEvent,
   HealthResponse,
   Incident,
@@ -35,4 +39,8 @@ export interface TokenShieldApi {
   stopSimulation(): Promise<StopSimulationResponse>;
   triggerSimulation(scenario: SimulationScenario): Promise<TriggerSimulationResponse>;
   getHealth(): Promise<HealthResponse>;
+  getAgentGuards(agentId: string): Promise<AgentGuards>;
+  updateAgentGuards(agentId: string, body: GuardValues): Promise<AgentGuards>;
+  askOracle(question: string, agentId?: string): Promise<OracleAnswer>;
+  getNotificationStatus(): Promise<NotificationStatus>;
 }

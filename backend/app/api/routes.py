@@ -5,9 +5,9 @@ from sqlalchemy import select, func, text
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.database.session import get_db
-from app.models.models import Agent, AgentEvent, Incident, now
+from app.models.models import Agent, AgentEvent, AgentGuard, Incident, now
 from app.schemas.schemas import (AgentRegister, EventIn, IncidentPatch, IncidentOut,
-                                 EventOut, AgentOut)
+                                 EventOut, AgentOut, AgentGuardsIn, OracleQuestion)
 from app.services.ingest.pipeline import process_event
 from app.simulation import runner
 
@@ -87,6 +87,39 @@ def resume_agent(agent_id: str, db: Session = Depends(get_db)):
     a.status = "active"
     db.commit()
     return {"agent_id": a.id, "status": a.status}
+
+
+# ---------- per-hero budgets (guards) ----------
+GUARD_DEFAULTS = lambda: {"max_task_tokens": settings.max_task_tokens, "max_task_cost": settings.max_task_cost,
+                          "max_repeated_calls": settings.max_repeated_calls,
+                          "max_consecutive_failures": settings.max_consecutive_failures}
+
+
+def _guards_out(agent_id, g):
+    fields = GUARD_DEFAULTS()
+    return {"agent_id": agent_id, "defaults": fields,
+            **{k: (getattr(g, k) if g else None) for k in fields}}
+
+
+@router.get("/agents/{agent_id}/guards")
+def get_guards(agent_id: str, db: Session = Depends(get_db)):
+    if not db.get(Agent, agent_id):
+        raise HTTPException(404, "agent not found")
+    return _guards_out(agent_id, db.get(AgentGuard, agent_id))
+
+
+@router.put("/agents/{agent_id}/guards")
+def put_guards(agent_id: str, body: AgentGuardsIn, db: Session = Depends(get_db)):
+    """Replace this hero's budgets. Send null for a field to go back to the global default."""
+    if not db.get(Agent, agent_id):
+        raise HTTPException(404, "agent not found")
+    g = db.get(AgentGuard, agent_id) or AgentGuard(agent_id=agent_id)
+    for k, v in body.model_dump().items():
+        setattr(g, k, v)
+    g.updated_at = now()
+    db.add(g)
+    db.commit()
+    return _guards_out(agent_id, g)
 
 
 @router.get("/agents/{agent_id}/events", response_model=list[EventOut])
@@ -218,6 +251,21 @@ def patch_incident(incident_id: str, body: IncidentPatch, db: Session = Depends(
     i.status = body.status
     db.commit()
     return _incident_out(db, i)
+
+
+# ---------- Ask the Oracle (plain-language Q&A, Gemini with rule-based fallback) ----------
+@router.post("/oracle/ask")
+def oracle_ask(body: OracleQuestion, db: Session = Depends(get_db)):
+    from app.services.oracle.oracle import ask
+    return ask(db, body.question, body.agent_id)
+
+
+# ---------- alert channels ----------
+@router.get("/notifications/status")
+def notifications_status():
+    from app.services.alerts.channels import email_enabled, slack_enabled
+    return {"discord": bool(settings.discord_webhook_url), "slack": slack_enabled(),
+            "email": email_enabled(), "gemini": bool(settings.gemini_api_key)}
 
 
 # ---------- simulation ----------

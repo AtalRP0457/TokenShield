@@ -7,6 +7,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { AlertSettingsCard } from '../components/layout/AlertSettingsCard';
 
 interface FieldSpec {
   key: ProtectionSettingKey;
@@ -73,11 +74,11 @@ export function SettingsPage() {
             </>
           ) : (
             <>
-              <p className="font-medium text-amber-200">The backend uses its own built-in limits for now</p>
+              <p className="font-medium text-amber-200">Per-hero budgets are enforced by the backend</p>
               <p className="mt-1">
-                TokenShield’s backend already detects loops, failure streaks and budget overruns, and pauses the agent, using its own thresholds.
-                It doesn’t expose a settings endpoint yet, so the values here are saved in your browser only. Each limit will switch to{' '}
-                <span className="text-fg">Enforced by backend</span> once the API supports it.
+                TokenShield’s backend detects loops, failure streaks and budget overruns and pauses the agent, using the limits in its .env file.
+                To change a limit for one hero, open that hero and use <span className="text-fg">This hero's budgets</span>: the backend enforces those right away.
+                The global values below are saved in your browser only.
               </p>
             </>
           )}
@@ -160,6 +161,8 @@ export function SettingsPage() {
           </div>
         </form>
       </Card>
+
+      <AlertSettingsCard />
     </>
   );
 }

@@ -24,6 +24,13 @@ class Settings:
     gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
     gemini_fallback_models = [m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS", "").split(",") if m.strip()]
     discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
+    slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "")
+    smtp_host = os.getenv("SMTP_HOST", "")
+    smtp_port = _i("SMTP_PORT", 587)
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    alert_email_from = os.getenv("ALERT_EMAIL_FROM", "")
+    alert_email_to = os.getenv("ALERT_EMAIL_TO", "")
     environment = os.getenv("ENVIRONMENT", "development")
     api_key = os.getenv("API_KEY", "development-key")
     frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Eye, RotateCcw, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Download, Eye, Printer, RotateCcw, ShieldAlert } from 'lucide-react';
 import { api, ApiError } from '../services';
 import { useApiQuery } from '../hooks/useApiQuery';
 import { useNow } from '../hooks/useNow';
@@ -20,6 +20,10 @@ import { EvidenceList } from '../components/incidents/EvidenceList';
 import { ResumeAgentButton } from '../components/agents/AgentControls';
 import { SimulatedBadge } from '../components/ui/SimulatedBadge';
 import { ActivityFeed } from '../components/activity/ActivityFeed';
+import { VoyageReplay } from '../components/incidents/VoyageReplay';
+import { QuickFixCard } from '../components/incidents/QuickFixCard';
+import { plainSentence } from '../lib/plain';
+import { downloadText, incidentReportMarkdown } from '../lib/report';
 
 const Back = () => (
   <Link to="/incidents" className="inline-flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg">
@@ -99,6 +103,12 @@ export function IncidentDetailPage() {
         actions={
           i && (
             <>
+              <Button size="sm" variant="ghost" icon={Download} onClick={() => downloadText(`tokenshield-${i.id}.md`, incidentReportMarkdown(i, agent.data, events.data ?? []))}>
+                Export report
+              </Button>
+              <Button size="sm" variant="ghost" icon={Printer} onClick={() => window.print()}>
+                Print / PDF
+              </Button>
               {i.status === 'open' && (
                 <Button size="sm" icon={Eye} loading={pending === 'acknowledged'} disabled={pending !== null} onClick={() => void setStatus('acknowledged')}>
                   Acknowledge
@@ -150,7 +160,14 @@ export function IncidentDetailPage() {
               </CardBody>
             </Card>
 
-            <GeminiExplanation analysis={i.gemini_analysis} pending={analysisPending} analyzing={analyzing} onAnalyze={() => void analyze()} analyzeError={analyzeError} />
+            <GeminiExplanation analysis={i.gemini_analysis} plainFallback={plainSentence(i.incident_type)} pending={analysisPending} analyzing={analyzing} onAnalyze={() => void analyze()} analyzeError={analyzeError} />
+
+            <QuickFixCard incident={i} />
+
+            <Card>
+              <CardHeader title="Replay the voyage" description="Step through what the hero did, up to the moment TokenShield caught it" />
+              {events.error ? <ErrorState error={events.error} onRetry={events.refetch} /> : events.loading ? <LoadingState className="p-5" rows={4} /> : <VoyageReplay incident={i} events={events.data ?? []} />}
+            </Card>
 
             {i.gemini_analysis && i.gemini_analysis.recommended_actions.length > 0 && (
               <Card>

@@ -21,4 +21,9 @@ export const realApi: TokenShieldApi = {
   stopSimulation: () => request('POST', '/api/simulation/stop'),
   triggerSimulation: (scenario) => request('POST', '/api/simulation/trigger', { query: { scenario } }),
   getHealth: () => request('GET', '/api/health'),
+  getAgentGuards: (id) => request('GET', `/api/agents/${enc(id)}/guards`),
+  updateAgentGuards: (id, body) => request('PUT', `/api/agents/${enc(id)}/guards`, { body }),
+  askOracle: (question, agentId) =>
+    request('POST', '/api/oracle/ask', { body: { question, agent_id: agentId ?? null }, timeoutMs: config.analyzeTimeoutMs }),
+  getNotificationStatus: () => request('GET', '/api/notifications/status'),
 };

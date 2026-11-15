@@ -11,6 +11,7 @@ import { ActivityPage } from './pages/ActivityPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ConnectAgentPage } from './pages/ConnectAgentPage';
+import { OraclePage } from './pages/OraclePage';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
               <Route path="activity" element={<ActivityPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="connect" element={<ConnectAgentPage />} />
+              <Route path="oracle" element={<OraclePage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>

@@ -4,7 +4,7 @@ import json
 from datetime import timedelta
 from sqlalchemy import select
 from app.core.config import settings
-from app.models.models import Agent, AgentTask, AgentEvent, Incident, now
+from app.models.models import Agent, AgentGuard, AgentTask, AgentEvent, Incident, now
 from app.services.cost.pricing import estimate_cost
 from app.services.detection.engine import Thresholds, run_detection
 
@@ -13,14 +13,23 @@ from app.services.detection.engine import Thresholds, run_detection
 incident_hooks = []
 
 
-def thresholds_from_settings() -> Thresholds:
-    return Thresholds(
+GUARD_FIELDS = ("max_task_tokens", "max_task_cost", "max_repeated_calls", "max_consecutive_failures")
+
+
+def thresholds_from_settings(guard: "AgentGuard | None" = None) -> Thresholds:
+    t = Thresholds(
         max_repeated_calls=settings.max_repeated_calls,
         max_consecutive_failures=settings.max_consecutive_failures,
         max_sequence_repeats=settings.max_sequence_repeats,
         max_task_tokens=settings.max_task_tokens,
         max_task_cost=settings.max_task_cost,
         max_task_duration_seconds=settings.max_task_duration_seconds)
+    if guard is not None:  # per-hero budgets set from the dashboard win over the globals
+        for f in GUARD_FIELDS:
+            v = getattr(guard, f)
+            if v is not None:
+                setattr(t, f, v)
+    return t
 
 
 def hash_args(args) -> str | None:
@@ -75,7 +84,7 @@ def process_event(db, payload):
                   estimated_cost=r.estimated_cost, timestamp=r.timestamp) for r in rows]
 
     new_incidents, pause = [], False
-    for d in run_detection(dicts, thresholds_from_settings()):
+    for d in run_detection(dicts, thresholds_from_settings(db.get(AgentGuard, agent.id))):
         pause = pause or d.should_pause
         if _recent_duplicate(db, task_id, d.incident_type):
             continue

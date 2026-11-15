@@ -74,3 +74,16 @@ class AgentOut(BaseModel):
     total_tokens: int = 0
     estimated_cost: float = 0.0
     open_incidents: int = 0
+
+
+class AgentGuardsIn(BaseModel):
+    """Per-hero budgets. null = use the global default from .env."""
+    max_task_tokens: int | None = Field(default=None, ge=100)
+    max_task_cost: float | None = Field(default=None, gt=0)
+    max_repeated_calls: int | None = Field(default=None, ge=2)
+    max_consecutive_failures: int | None = Field(default=None, ge=1)
+
+
+class OracleQuestion(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    agent_id: str | None = None

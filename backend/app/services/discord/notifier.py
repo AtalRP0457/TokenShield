@@ -19,7 +19,8 @@ def build_payload(inc, agent_name):
         {"name": "Estimated waste", "value": f"${inc.estimated_waste:.4f} (estimate)", "inline": True},
     ]
     if g:
-        fields.append({"name": "Gemini analysis", "value": str(g.get("summary", ""))[:500], "inline": False})
+        fields.append({"name": "In plain words",
+                       "value": str(g.get("plain_explanation") or g.get("summary", ""))[:500], "inline": False})
         acts = g.get("recommended_actions") or []
         if acts:
             fields.append({"name": "Recommended actions",

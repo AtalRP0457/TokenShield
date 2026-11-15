@@ -14,6 +14,8 @@
 import type { TokenShieldApi } from '../apiClient';
 import { ApiError } from '../http';
 import { loadSettings } from '../settingsStorage';
+import { plainFor, plainSentence } from '../../lib/plain';
+import type { ProtectionSettings } from '../../types/settings';
 import type * as V2 from '../../types/api';
 import type {
   Agent,
@@ -54,6 +56,33 @@ let incidentSeq = 1043;
 const evidenceById: Record<string, Record<string, unknown>> = {};
 /** When each incident's Gemini analysis becomes available. */
 const analysisReadyAt: Record<string, number> = {};
+
+/** Per-hero budget overrides (PUT /api/agents/{id}/guards). */
+const guardsById: Record<string, V2.GuardValues> = {};
+
+function guardDefaults(): V2.AgentGuards['defaults'] {
+  const l = loadSettings();
+  return { max_task_tokens: l.maxTokensPerTask, max_task_cost: l.maxCostPerTaskUsd, max_repeated_calls: l.maxRepeatedToolCalls, max_consecutive_failures: l.maxConsecutiveFailures };
+}
+
+/** Global limits with this hero's overrides applied. */
+function limitsFor(agentId: string): ProtectionSettings {
+  const l = loadSettings();
+  const g = guardsById[agentId];
+  if (!g) return l;
+  return {
+    ...l,
+    maxTokensPerTask: g.max_task_tokens ?? l.maxTokensPerTask,
+    maxCostPerTaskUsd: g.max_task_cost ?? l.maxCostPerTaskUsd,
+    maxRepeatedToolCalls: g.max_repeated_calls ?? l.maxRepeatedToolCalls,
+    maxConsecutiveFailures: g.max_consecutive_failures ?? l.maxConsecutiveFailures,
+  };
+}
+
+function toGuards(agentId: string): V2.AgentGuards {
+  const g = guardsById[agentId] ?? { max_task_tokens: null, max_task_cost: null, max_repeated_calls: null, max_consecutive_failures: null };
+  return { agent_id: agentId, defaults: guardDefaults(), ...g };
+}
 
 /** Per-agent streak counters used by enforce(). */
 const streaks: Record<string, { failures: AgentEvent[]; repeats: AgentEvent[] }> = {};
@@ -183,6 +212,7 @@ function toIncidentV2(i: Incident): V2.Incident {
             recommended_actions: i.recommended_actions,
             estimated_wasted_resources: `About $${i.estimated_waste_usd.toFixed(2)} (estimated) in tokens and tool calls`,
             additional_investigation: ['Check whether the same pattern appeared in earlier runs of this task.'],
+            plain_explanation: plainSentence(type),
           }
         : null,
     status: i.status,
@@ -286,7 +316,7 @@ function ingest(event: AgentEvent): { action: AgentAction; reason: string | null
 }
 
 function enforce(agent: Agent, event: AgentEvent, tokensBefore: number, task?: AgentTask): { action: AgentAction; reason: string | null } {
-  const limits = loadSettings();
+  const limits = limitsFor(agent.id);
   const s = streakFor(agent.id);
 
   if (isToolEvent(event)) {
@@ -349,7 +379,7 @@ function tick() {
 
   // Healthy agents finish tasks before hitting the budget, so background
   // traffic never trips the token rule on its own.
-  const limit = loadSettings().maxTokensPerTask;
+  const limit = limitsFor(agent.id).maxTokensPerTask;
   for (const task of tasks[agent.id] ?? []) {
     if (task.status !== 'running' || task.tokens_used <= limit * 0.6) continue;
     ingest({ id: nextEventId(), agent_id: agent.id, agent_name: agent.name, type: 'task_completed', task_id: task.id, success: true, timestamp: nowIso(), message: `Completed task “${task.name}”` });
@@ -371,7 +401,7 @@ function runScenario(scenario: V2.SimulationScenario) {
   };
   const agent = pickAgent(preferred[scenario]);
   if (!agent) return;
-  const limits = loadSettings();
+  const limits = limitsFor(agent.id);
   const tools = profileById(agent.id).tools;
   let result: ReturnType<typeof ingest> = { action: 'continue', reason: null };
 
@@ -517,7 +547,78 @@ export const mockApi: TokenShieldApi = {
     }),
 
   getHealth: () => respond(() => ({ status: 'ok', environment: 'mock' })),
+
+  getAgentGuards: (id) => respond(() => { findAgent(id); return toGuards(id); }),
+
+  updateAgentGuards: (id, body) =>
+    respond(() => {
+      findAgent(id);
+      guardsById[id] = { ...body };
+      return toGuards(id);
+    }),
+
+  askOracle: (question, agentId) => respond(() => mockOracle(question, agentId), 900),
+
+  getNotificationStatus: () => respond((): V2.NotificationStatus => ({ discord: false, slack: false, email: false, gemini: false })),
 };
+
+/* ---------------- demo-mode Oracle (rule-based, plain words) ---------------- */
+
+const usd = (v: number) => (v >= 0.01 ? `about $${v.toFixed(2)}` : 'less than a cent');
+const nice = (name: string) => name.replace(/^\[SIM\]\s*/, '');
+
+function mockOracle(question: string, agentId?: string): V2.OracleAnswer {
+  const q = question.toLowerCase();
+  const pool = agentId ? agents.filter((a) => a.id === agentId) : agents;
+  const ranked = [...pool].sort((a, b) => b.total_cost_usd - a.total_cost_usd);
+  const total = pool.reduce((s, a) => s + a.total_cost_usd, 0);
+  const open = incidents.filter((i) => i.status !== 'resolved' && (!agentId || i.agent_id === agentId));
+  const latest = open[0];
+  const base = { source: 'rules' as const };
+
+  if (/(cost|spend|money|expensive|price|bill|\$)/.test(q)) {
+    const top = ranked[0];
+    return {
+      ...base,
+      answer: `${nice(top.name)} has cost the most so far: ${usd(top.total_cost_usd)} out of ${usd(total)} in total. These numbers are estimates, not your real bill.`,
+      key_points: ranked.slice(0, 3).map((a) => `${nice(a.name)}: ${usd(a.total_cost_usd)}`),
+      next_step: `Open ${nice(top.name)} and set a budget so it pauses before it spends too much.`,
+    };
+  }
+  if (/(save|saved|saving|protect)/.test(q)) {
+    const waste = incidents.reduce((s, i) => s + i.estimated_waste_usd, 0);
+    return {
+      ...base,
+      answer: `TokenShield caught ${incidents.length} problems and paused the agents involved. Those problems had already wasted ${usd(waste)}; without the pause, the loops would have kept going and cost several times more.`,
+      key_points: ['Loops are stopped automatically', 'Each stop is explained in plain words', 'You decide when to resume'],
+      next_step: 'See the "Saved by TokenShield" card on The watch.',
+    };
+  }
+  if (/(paus|stop|why)/.test(q) && latest) {
+    const p = plainFor(INCIDENT_TYPE_V2[latest.type]);
+    return {
+      ...base,
+      answer: `${nice(latest.agent_name)} was paused because ${p.what.charAt(0).toLowerCase()}${p.what.slice(1)} ${p.analogy}`,
+      key_points: [latest.description, `Wasted ${usd(latest.estimated_waste_usd)} before it was stopped`],
+      next_step: p.fix,
+    };
+  }
+  if (open.length > 0) {
+    const p = plainFor(INCIDENT_TYPE_V2[latest.type]);
+    return {
+      ...base,
+      answer: `${open.length} problem${open.length > 1 ? 's' : ''} still need attention. The latest is on ${nice(latest.agent_name)}: ${p.what} ${p.analogy}`,
+      key_points: open.slice(0, 3).map((i) => `${nice(i.agent_name)}: ${i.title}`),
+      next_step: p.fix,
+    };
+  }
+  return {
+    ...base,
+    answer: `All calm. ${pool.length} hero${pool.length === 1 ? ' is' : 'es are'} at sea, there are no open problems, and total estimated spend is ${usd(total)}.`,
+    key_points: [],
+    next_step: '',
+  };
+}
 
 /** Mock-only: lets the UI show the simulator's initial state without an API call. */
 export const isMockSimulationRunning = () => simulationRunning;

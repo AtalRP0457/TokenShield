@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { RefreshCw, Sparkles } from 'lucide-react';
+import { Lightbulb, RefreshCw, Sparkles } from 'lucide-react';
 import type { GeminiAnalysis } from '../../types/api';
 import { formatPercent } from '../../lib/format';
 import { Button } from '../ui/Button';
@@ -8,6 +8,8 @@ import { SeverityBadge } from './IncidentBadges';
 
 interface Props {
   analysis: GeminiAnalysis | null;
+  /** Shown as "In plain words" when Gemini hasn't written its own plain explanation. */
+  plainFallback?: string;
   /** True while Gemini is expected to still be working on a new incident. */
   pending: boolean;
   analyzing: boolean;
@@ -35,7 +37,8 @@ function Bullets({ items }: { items: string[] }) {
 }
 
 /** Gemini's analysis (`gemini_analysis`), framed as the Oracle's reading. */
-export function GeminiExplanation({ analysis, pending, analyzing, onAnalyze, analyzeError }: Props) {
+export function GeminiExplanation({ analysis, plainFallback, pending, analyzing, onAnalyze, analyzeError }: Props) {
+  const plain = analysis?.plain_explanation || plainFallback;
   return (
     <div className="rounded-xl border border-bronze/25 bg-bronze/[0.06] p-5">
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -50,6 +53,16 @@ export function GeminiExplanation({ analysis, pending, analyzing, onAnalyze, ana
         )}
       </div>
 
+      {plain && (
+        <div className="mb-4 flex gap-3 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] p-3.5">
+          <Lightbulb className="mt-0.5 size-4 shrink-0 text-emerald-300" />
+          <div>
+            <p className="text-xs font-medium tracking-wide text-emerald-300/90 uppercase">In plain words</p>
+            <p className="mt-1 text-[15px] leading-relaxed text-fg">{plain}</p>
+          </div>
+        </div>
+      )}
+
       {analyzing || (pending && !analysis) ? (
         <div className="space-y-2" aria-busy="true">
           <p className="flex items-center gap-2 text-sm text-bronze">
@@ -62,7 +75,7 @@ export function GeminiExplanation({ analysis, pending, analyzing, onAnalyze, ana
       ) : analysis ? (
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-fg">{analysis.summary}</p>
-          <Section title="Probable root cause">
+          <Section title="Why it happened">
             <p className="text-sm leading-relaxed text-fg-muted">{analysis.probable_root_cause}</p>
           </Section>
           {analysis.evidence.length > 0 && <Section title="Evidence"><Bullets items={analysis.evidence} /></Section>}

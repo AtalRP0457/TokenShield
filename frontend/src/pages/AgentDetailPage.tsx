@@ -25,6 +25,8 @@ import { SuspiciousBehavior } from '../components/agents/SuspiciousBehavior';
 import { ChartFrame } from '../components/charts/ChartFrame';
 import { TimeSeriesChart } from '../components/charts/TimeSeriesChart';
 import { ActivityFeed } from '../components/activity/ActivityFeed';
+import { PerilTimeline } from '../components/agents/PerilTimeline';
+import { GuardsCard } from '../components/agents/GuardsCard';
 
 const POLL_MS = 3_000;
 
@@ -108,6 +110,13 @@ export function AgentDetailPage() {
         </CardBody>
       </Card>
 
+      <Card className="mb-4">
+        <CardHeader title="Peril timeline" description="When TokenShield caught this hero misbehaving. Hover a mark for details." />
+        <CardBody>
+          {incidents.error ? <ErrorState error={incidents.error} onRetry={incidents.refetch} /> : <PerilTimeline incidents={agentIncidents} now={now} />}
+        </CardBody>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="Token consumption" description="From the last 100 events" />
@@ -151,6 +160,11 @@ export function AgentDetailPage() {
           </div>
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader title="This hero's budgets" description="Pause this hero automatically when it crosses these limits. Leave a box empty to use the global default." />
+        <GuardsCard agentId={agentId} />
+      </Card>
     </>
   );
 }

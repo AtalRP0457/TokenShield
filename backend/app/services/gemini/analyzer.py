@@ -18,6 +18,9 @@ class GeminiAnalysis(BaseModel):
     recommended_actions: list[str]
     estimated_wasted_resources: str
     additional_investigation: list[str]
+    # 2-3 sentences anyone can follow, with an everyday comparison. Optional so
+    # analyses stored before this field existed still validate.
+    plain_explanation: str = ""
 
     @field_validator("severity", mode="before")
     @classmethod
@@ -47,17 +50,31 @@ def _clean(obj):
     return redact(obj) if isinstance(obj, str) else obj
 
 
+PLAIN_RULES = (
+    "WRITING STYLE (very important): the reader may be a beginner who has never written code.\n"
+    "- Use short sentences and everyday words. No jargon. If a technical word is unavoidable, "
+    "explain it in a few words in brackets, e.g. 'tool call (the agent asking another program to do something)'.\n"
+    "- Say what happened, why it matters (money or time wasted) and what to do next, in that order.\n"
+    "- Use concrete numbers from the data. Dollar amounts are ESTIMATES; say 'about' or 'roughly'.\n"
+    "- Never invent facts that are not in the data.\n")
+
+
 def build_prompt(incident: dict) -> str:
     safe = _clean(incident)
     return (
-        "You are an SRE assistant explaining an incident in an AI-agent monitoring tool.\n"
+        "You explain problems in an AI-agent monitoring tool called TokenShield.\n"
         "A rule-based detector ALREADY flagged this incident; do not question whether it happened.\n"
         "All dollar figures are ESTIMATES from a pricing table, not real provider billing.\n"
         "Use ONLY the data below. If evidence is insufficient, say so and lower your confidence.\n"
+        + PLAIN_RULES +
         "Respond with a single JSON object with exactly these keys:\n"
-        'summary (string), probable_root_cause (string), severity ("low"|"medium"|"high"|"critical"), '
-        "confidence (number 0 to 1), evidence (list of strings), recommended_actions (list of strings; "
-        "suggestions for a human, nothing is auto-executed), estimated_wasted_resources (string, say it is an estimate), "
+        "plain_explanation (string: 2-3 simple sentences a non-programmer understands, with one everyday "
+        "comparison, e.g. 'like a person redialling a busy phone number over and over'), "
+        "summary (string: one plain sentence), probable_root_cause (string: plain words), "
+        'severity ("low"|"medium"|"high"|"critical"), '
+        "confidence (number 0 to 1), evidence (list of short plain strings), recommended_actions (list of short, "
+        "concrete steps a beginner could follow; suggestions only, nothing is auto-executed), "
+        "estimated_wasted_resources (string, say it is an estimate), "
         "additional_investigation (list of strings).\n\n"
         "INCIDENT DATA:\n" + json.dumps(safe, indent=2, default=str))
 

@@ -20,6 +20,18 @@ TokenShield is the guard that notices.
 
 All costs are **estimates** (computed from token counts), not provider billing.
 
+## Features
+
+- **Saved by TokenShield**: a headline estimate of the money kept from being burned by caught loops.
+- **Ask the Oracle**: ask questions in everyday words ("Which hero costs the most?") and Gemini answers in plain English from your own data. Falls back to a rule-based answer if Gemini is unavailable.
+- **"In plain words" explanations**: every peril is explained so a non-programmer understands it, with an everyday comparison.
+- **Athena's quick fix**: one-click budget change for the hero that hit the peril.
+- **Per-hero budgets**: spend, token, repeat and failure limits per agent, enforced by the backend on the next event.
+- **Replay the voyage**: step through what the agent did up to the moment it was caught.
+- **Peril timeline** on each hero, and a **costliest heroes** leaderboard on the dashboard.
+- **Alerts**: in-app toast, chime and desktop notification on high/critical perils; Discord, Slack and email from the backend.
+- **Export report**: download a peril as Markdown, or print / save as PDF.
+
 ## The perils it catches
 
 Every incident type is named after a danger from Homer's *Odyssey*, with its plain-English name always shown alongside:
@@ -158,6 +170,14 @@ Stopping is cooperative: TokenShield answers every event with whether the agent 
 The full contract the dashboard uses is documented in [`frontend/README.md`](frontend/README.md) and typed in `frontend/src/types/api.ts`. Main endpoints:
 
 `GET /api/metrics/overview` · `GET /api/metrics/timeseries?minutes=N` · `GET /api/agents` · `POST /api/agents/{id}/resume` · `GET /api/events/recent` · `GET /api/incidents` · `PATCH /api/incidents/{id}` · `POST /api/incidents/{id}/analyze` · `POST /api/simulation/start|stop|trigger` · `POST /api/events` (agents, requires `X-API-Key`)
+
+### New endpoints
+
+| Method | Path | What it does |
+|---|---|---|
+| GET / PUT | `/api/agents/{id}/guards` | Read or set one hero's budgets (`null` = global default) |
+| POST | `/api/oracle/ask` | `{question, agent_id?}` → plain-language answer |
+| GET | `/api/notifications/status` | Which alert channels (Discord, Slack, email, Gemini) are configured |
 
 ## Security notes
 

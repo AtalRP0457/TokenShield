@@ -67,3 +67,21 @@
   background-repeat: repeat-x;
   opacity: 0.35;
 }
+
+/* Print / "Save as PDF" of a peril page: drop the app chrome and controls. */
+@media print {
+  aside,
+  header,
+  button,
+  .no-print {
+    display: none !important;
+  }
+  .lg\:pl-60 {
+    padding-left: 0 !important;
+  }
+  body {
+    background: #110a18;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
