@@ -33,6 +33,7 @@ class Settings:
     alert_email_to = os.getenv("ALERT_EMAIL_TO", "")
     environment = os.getenv("ENVIRONMENT", "development")
     api_key = os.getenv("API_KEY", "development-key")
+    # Comma-separated list of websites allowed to call the API (CORS).
     frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
     max_repeated_calls = _i("MAX_REPEATED_CALLS", 5)
     max_consecutive_failures = _i("MAX_CONSECUTIVE_FAILURES", 5)

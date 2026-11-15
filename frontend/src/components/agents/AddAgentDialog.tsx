@@ -8,11 +8,13 @@ import { Button } from '../ui/Button';
 import { CodeBlock } from '../ui/CodeBlock';
 
 /** Where agents send events (directly to the backend, not through the dashboard). */
-const BACKEND = 'http://localhost:8000';
+const BACKEND = config.apiBaseUrl || 'http://localhost:8000';
+/** Online, the key is the random API_KEY Render generated; locally it's the default. */
+const AGENT_KEY = config.apiBaseUrl ? 'YOUR_API_KEY' : 'development-key';
 
 const snippet = (a: Agent) => `from tokenshield import TokenShield, TokenShieldPaused
 
-shield = TokenShield(api_url="${BACKEND}", api_key="development-key")
+shield = TokenShield(api_url="${BACKEND}", api_key="${AGENT_KEY}")
 agent = shield.connect_agent("${a.id}", name="${a.name.replace(/"/g, '\\"')}")
 
 def run_step(name, fn, *args):

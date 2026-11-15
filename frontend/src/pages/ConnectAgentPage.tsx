@@ -9,7 +9,9 @@ import { Button } from '../components/ui/Button';
 import { cn } from '../components/ui/cn';
 
 /** Where agents send events. Agents talk to the backend directly (not through the dashboard). */
-const BACKEND = 'http://localhost:8000';
+const BACKEND = config.apiBaseUrl || 'http://localhost:8000';
+/** Online, the key is the random API_KEY Render generated; locally it's the default. */
+const AGENT_KEY = config.apiBaseUrl ? 'YOUR_API_KEY' : 'development-key';
 
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
@@ -30,7 +32,7 @@ export PYTHONPATH=$PWD/sdk`;
 
 const PY_AGENT = `from tokenshield import TokenShield, TokenShieldPaused
 
-shield = TokenShield(api_url="${BACKEND}", api_key="development-key")
+shield = TokenShield(api_url="${BACKEND}", api_key="${AGENT_KEY}")
 agent = shield.register_agent(name="My Research Agent",
                               description="Summarises papers")
 
@@ -49,12 +51,12 @@ except TokenShieldPaused:
 
 const CURL = `# 1. Register (returns an agent_id)
 curl -X POST ${BACKEND}/api/agents/register \\
-  -H "X-API-Key: development-key" -H "Content-Type: application/json" \\
+  -H "X-API-Key: ${AGENT_KEY}" -H "Content-Type: application/json" \\
   -d '{"name": "My Node Agent"}'
 
 # 2. Report each step; stop when the reply says "should_stop": true
 curl -X POST ${BACKEND}/api/events \\
-  -H "X-API-Key: development-key" -H "Content-Type: application/json" \\
+  -H "X-API-Key: ${AGENT_KEY}" -H "Content-Type: application/json" \\
   -d '{"agent_id": "<agent_id>", "task_id": "task-1", "tool_name": "web_search",
        "input_tokens": 500, "output_tokens": 200, "success": true}'`;
 

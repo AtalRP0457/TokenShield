@@ -1,0 +1,30 @@
+# Render Blueprint: hosts the TokenShield backend (FastAPI) online.
+# Render -> New -> Blueprint -> pick this repo. Values marked sync:false are asked for once.
+services:
+  - type: web
+    name: tokenshield-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL          # your Tiger Data address (postgresql+psycopg2://...)
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: API_KEY               # agents send this as X-API-Key; Render generates a random one
+        generateValue: true
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_FALLBACK_MODELS
+        value: gemini-3.1-flash-lite
+      - key: FRONTEND_ORIGIN       # websites allowed to call this backend (comma-separated)
+        value: https://tokenshields.work,https://www.tokenshields.work,https://tokenshield-aegis.vercel.app,http://localhost:5173
+      - key: INCIDENT_COOLDOWN_SECONDS
+        value: "300"
+      - key: ENVIRONMENT
+        value: production

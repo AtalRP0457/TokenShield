@@ -13,7 +13,7 @@ Base.metadata.create_all(engine)
 app = FastAPI(title="TokenShield API",
               description="Agent monitoring. All costs are ESTIMATES, not provider billing.")
 app.add_middleware(CORSMiddleware,
-                   allow_origins=[settings.frontend_origin, "http://localhost:3000"],
+                   allow_origins=[o.strip() for o in settings.frontend_origin.split(",") if o.strip()] + ["http://localhost:3000"],
                    allow_methods=["*"], allow_headers=["*"])
 incident_hooks.append(gemini_hook)
 incident_hooks.append(discord_hook)
