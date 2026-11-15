@@ -15,9 +15,13 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-bronze' : 'bg-surface-3'}`}
+      className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze ${checked ? 'bg-bronze' : 'bg-surface-3'}`}
     >
-      <span className={`absolute top-0.5 size-5 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+      <span
+        aria-hidden
+        className="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow transition-transform duration-150 ease-out will-change-transform"
+        style={{ transform: checked ? 'translateX(20px)' : 'translateX(0)' }}
+      />
     </button>
   );
 }
@@ -35,6 +39,12 @@ export function AlertSettingsCard() {
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>(() => ('Notification' in window ? Notification.permission : 'unsupported'));
   const status = useApiQuery(() => api.getNotificationStatus(), []);
 
+  const [soundMsg, setSoundMsg] = useState<string | null>(null);
+  const testSound = async () => {
+    const ok = await playChime();
+    setSoundMsg(ok ? null : 'Your browser is blocking sound. Check the tab is not muted and your volume is up, then try again.');
+  };
+
   const update = (next: AlertPrefs) => {
     setPrefs(next);
     saveAlertPrefs(next);
@@ -42,10 +52,12 @@ export function AlertSettingsCard() {
 
   const enableDesktop = async (on: boolean) => {
     if (!on) return update({ ...prefs, desktop: false });
-    if (perm === 'unsupported') return;
-    const result = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+    if (perm === 'unsupported' || perm === 'denied') return;
+    update({ ...prefs, desktop: true }); // switch moves immediately
+    if (Notification.permission === 'granted') return;
+    const result = await Notification.requestPermission();
     setPerm(result);
-    update({ ...prefs, desktop: result === 'granted' });
+    if (result !== 'granted') update({ ...prefs, desktop: false });
   };
 
   return (
@@ -56,10 +68,11 @@ export function AlertSettingsCard() {
           <Volume2 className="size-4 text-fg-subtle" />
           <div className="flex-1">
             <p className="text-sm text-fg">Play a sound</p>
-            <p className="text-xs text-fg-subtle">A short chime while this dashboard is open.</p>
+            <p className="text-xs text-fg-subtle">A short chime while this dashboard is open. Click anywhere on the page once after opening it so the browser allows sound.</p>
+            {soundMsg && <p role="alert" className="mt-1 text-xs text-amber-300">{soundMsg}</p>}
           </div>
-          <Button size="sm" variant="ghost" onClick={playChime}>Test</Button>
-          <Toggle label="Play a sound" checked={prefs.sound} onChange={(v) => update({ ...prefs, sound: v })} />
+          <Button size="sm" variant="ghost" onClick={() => void testSound()}>Test</Button>
+          <Toggle label="Play a sound" checked={prefs.sound} onChange={(v) => { update({ ...prefs, sound: v }); if (v) window.setTimeout(() => void playChime(), 180); }} />
         </div>
         <div className="flex items-center gap-4">
           {prefs.desktop ? <BellRing className="size-4 text-fg-subtle" /> : <Bell className="size-4 text-fg-subtle" />}

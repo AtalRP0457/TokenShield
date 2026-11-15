@@ -86,6 +86,20 @@ export interface Agent {
   open_incidents: number;
 }
 
+/** POST /api/agents — add a hero from the dashboard. */
+export interface CreateAgentRequest {
+  name: string;
+  description: string;
+}
+
+/** POST /api/agents/{id}/test-failure */
+export interface TestFailureResponse {
+  event_id: string;
+  agent_status: AgentStatus;
+  should_stop: boolean;
+  new_incident_ids: string[];
+}
+
 /** POST /api/agents/{id}/resume */
 export interface ResumeAgentResponse {
   agent_id: string;

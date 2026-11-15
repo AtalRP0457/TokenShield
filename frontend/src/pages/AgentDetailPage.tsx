@@ -27,6 +27,7 @@ import { TimeSeriesChart } from '../components/charts/TimeSeriesChart';
 import { ActivityFeed } from '../components/activity/ActivityFeed';
 import { PerilTimeline } from '../components/agents/PerilTimeline';
 import { GuardsCard } from '../components/agents/GuardsCard';
+import { FailureAlertControls } from '../components/agents/FailureAlertControls';
 
 const POLL_MS = 3_000;
 
@@ -86,7 +87,14 @@ export function AgentDetailPage() {
           )
         }
         description={a?.description}
-        actions={a && <ResumeAgentButton agent={a} onResumed={() => { void agent.refetch(); void events.refetch(); }} />}
+        actions={
+          a && (
+            <>
+              <FailureAlertControls agentId={a.id} onSent={() => { void agent.refetch(); void events.refetch(); void incidents.refetch(); }} />
+              <ResumeAgentButton agent={a} onResumed={() => { void agent.refetch(); void events.refetch(); }} />
+            </>
+          )
+        }
       />
 
       {a && <PausedBanner agent={a} />}

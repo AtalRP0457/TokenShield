@@ -57,6 +57,11 @@ const evidenceById: Record<string, Record<string, unknown>> = {};
 /** When each incident's Gemini analysis becomes available. */
 const analysisReadyAt: Record<string, number> = {};
 
+/** Heroes added from the dashboard: they only move when you send events (no simulator profile). */
+const userAgentIds = new Set<string>();
+const userFailureStreak: Record<string, number> = {};
+let userAgentSeq = 1;
+
 /** Per-hero budget overrides (PUT /api/agents/{id}/guards). */
 const guardsById: Record<string, V2.GuardValues> = {};
 
@@ -373,7 +378,7 @@ function enforce(agent: Agent, event: AgentEvent, tokensBefore: number, task?: A
 
 function tick() {
   if (!simulationRunning) return;
-  const live = agents.filter((a) => a.status === 'active' || a.status === 'error');
+  const live = agents.filter((a) => (a.status === 'active' || a.status === 'error') && !userAgentIds.has(a.id));
   if (live.length === 0) return;
   const agent = rng.pick(live);
 
@@ -394,7 +399,7 @@ function tick() {
 function runScenario(scenario: V2.SimulationScenario) {
   const pickAgent = (preferred: string) =>
     agents.find((a) => a.id === preferred && a.status !== 'paused') ??
-    agents.find((a) => a.status === 'active' || a.status === 'error');
+    agents.find((a) => (a.status === 'active' || a.status === 'error') && !userAgentIds.has(a.id));
 
   const preferred: Record<V2.SimulationScenario, string> = {
     repeating: 'agt_codereview', sequence_loop: 'agt_pipeline', failing: 'agt_support', token_heavy: 'agt_research', healthy: 'agt_sales',
@@ -500,6 +505,7 @@ export const mockApi: TokenShieldApi = {
     respond((): V2.ResumeAgentResponse => {
       const agent = findAgent(id);
       resume(agent);
+      userFailureStreak[id] = 0;
       return { agent_id: agent.id, status: 'active' };
     }),
 
@@ -547,6 +553,47 @@ export const mockApi: TokenShieldApi = {
     }),
 
   getHealth: () => respond(() => ({ status: 'ok', environment: 'mock' })),
+
+  createAgent: (body) =>
+    respond(() => {
+      const t = nowIso();
+      const agent: Agent = {
+        id: `agt_user${userAgentSeq++}`, name: body.name.trim(), description: body.description.trim(), model: 'gemini-3.5-flash-lite',
+        status: 'active', created_at: t, last_seen_at: t, total_tokens: 0, total_cost_usd: 0, tool_calls: 0, failed_tool_calls: 0,
+        incident_count: 0, paused_by: null, pause_reason: null,
+      };
+      agents.push(agent);
+      userAgentIds.add(agent.id);
+      return toAgentV2(agent);
+    }),
+
+  sendTestFailure: (id) =>
+    respond((): V2.TestFailureResponse => {
+      const agent = findAgent(id);
+      const event: AgentEvent = {
+        id: nextEventId(), agent_id: agent.id, agent_name: agent.name, type: 'api_failure', timestamp: nowIso(),
+        task_id: `${agent.id}-test`, tool_name: 'test_alert', success: false, tokens: 0, cost_usd: 0, latency_ms: 0,
+        message: 'test_alert failed: Test failure sent from the TokenShield dashboard',
+      };
+      if (agent.status === 'paused') return { event_id: event.id, agent_status: 'paused', should_stop: true, new_incident_ids: [] };
+      applyEvent(event);
+      // Same rule as the backend: N failures in a row → peril + pause.
+      const streak = (userFailureStreak[id] = (userFailureStreak[id] ?? 0) + 1);
+      const limit = limitsFor(id).maxConsecutiveFailures;
+      const created: string[] = [];
+      if (streak >= limit) {
+        const inc = openIncident(agent, 'consecutive_failures', 'high', `${streak} failures in a row`,
+          `${agent.name} failed ${streak} tool calls in a row.`, 0, [event],
+          'The agent kept failing on the same step. TokenShield paused it so it stops wasting money.',
+          ['Check the error message on the failed step.', 'Fix the cause, then resume the hero.'],
+          { consecutive_failures: streak, last_error: 'Test failure sent from the TokenShield dashboard', tool_name: 'test_alert' });
+        created.push(inc.id);
+        pause(agent, `${streak} consecutive failures`);
+        userFailureStreak[id] = 0;
+      }
+      const paused = (agent.status as string) === 'paused'; // pause() above may have changed it
+      return { event_id: event.id, agent_status: paused ? 'paused' : 'active', should_stop: paused, new_incident_ids: created };
+    }),
 
   getAgentGuards: (id) => respond(() => { findAgent(id); return toGuards(id); }),
 

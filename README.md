@@ -165,6 +165,17 @@ except TokenShieldPaused as e:
 
 Stopping is cooperative: TokenShield answers every event with whether the agent should stop, and the SDK raises `TokenShieldPaused` when it should.
 
+### Add an agent from the dashboard
+
+On **Heroes**, click **Add a hero**: name it, choose "alert me the moment any step fails", and how many failures in a row should pause it. You get the agent's ID and code to paste:
+
+```python
+agent = TokenShield(api_url="http://localhost:8000", api_key="development-key").connect_agent("<agent_id>")
+agent.log_tool_call("search_web", success=False, error="HTTP 503")  # report failures so you get alerted
+```
+
+Use **Send a test failure** (in the dialog or on the hero's page) to check the alert reaches you.
+
 ## API
 
 The full contract the dashboard uses is documented in [`frontend/README.md`](frontend/README.md) and typed in `frontend/src/types/api.ts`. Main endpoints:
@@ -175,6 +186,8 @@ The full contract the dashboard uses is documented in [`frontend/README.md`](fro
 
 | Method | Path | What it does |
 |---|---|---|
+| POST | `/api/agents` | Add a hero from the dashboard (`{name, description}`) |
+| POST | `/api/agents/{id}/test-failure` | Send one failed step, to test alerts |
 | GET / PUT | `/api/agents/{id}/guards` | Read or set one hero's budgets (`null` = global default) |
 | POST | `/api/oracle/ask` | `{question, agent_id?}` → plain-language answer |
 | GET | `/api/notifications/status` | Which alert channels (Discord, Slack, email, Gemini) are configured |

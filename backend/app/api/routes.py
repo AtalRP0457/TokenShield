@@ -71,6 +71,28 @@ def list_agents(db: Session = Depends(get_db)):
     return [_agent_out(db, a) for a in db.execute(select(Agent)).scalars()]
 
 
+@router.post("/agents", response_model=AgentOut)
+def create_agent(body: AgentRegister, db: Session = Depends(get_db)):
+    """Add a hero from the dashboard. The agent then reports with its agent_id
+    (SDK: TokenShield(...).connect_agent(agent_id))."""
+    agent = Agent(name=body.name.strip(), description=body.description.strip(), is_simulated=False)
+    db.add(agent)
+    db.commit()
+    return _agent_out(db, agent)
+
+
+@router.post("/agents/{agent_id}/test-failure")
+def test_failure(agent_id: str, db: Session = Depends(get_db)):
+    """Send one failed step for this hero, to check that failure alerts reach you.
+    Goes through the normal pipeline, so it counts toward 'failures in a row'."""
+    if not db.get(Agent, agent_id):
+        raise HTTPException(404, "agent not found")
+    res = process_event(db, EventIn(agent_id=agent_id, task_id=f"{agent_id}-test", tool_name="test_alert",
+                                    success=False, error_message="Test failure sent from the TokenShield dashboard"))
+    return {"event_id": res["event"].id, "agent_status": res["agent_status"],
+            "should_stop": res["should_stop"], "new_incident_ids": [i.id for i in res["new_incidents"]]}
+
+
 @router.get("/agents/{agent_id}", response_model=AgentOut)
 def get_agent(agent_id: str, db: Session = Depends(get_db)):
     a = db.get(Agent, agent_id)

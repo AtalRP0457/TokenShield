@@ -40,5 +40,10 @@ class TokenShield:
         return r.json()
 
     def register_agent(self, name, description=""):
+        """Create a new agent in TokenShield and return it."""
         r = self._post("/api/agents/register", {"name": name, "description": description})
         return Agent(self, r["agent_id"], name)
+
+    def connect_agent(self, agent_id, name=""):
+        """Report as an agent you already added in the dashboard ("Add a hero")."""
+        return Agent(self, agent_id, name or agent_id)

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Plug, RefreshCw } from 'lucide-react';
+import { Bot, Plug, Plus, RefreshCw } from 'lucide-react';
+import { AddAgentDialog } from '../components/agents/AddAgentDialog';
 import { api } from '../services';
 import { useApiQuery } from '../hooks/useApiQuery';
 import type { AgentStatus } from '../types/api';
@@ -17,6 +18,7 @@ import { AgentTable, type AgentSortKey } from '../components/agents/AgentTable';
 export function AgentsPage() {
   const agents = useApiQuery(() => api.getAgents(), [], { refreshMs: 3_000 });
   const [query, setQuery] = useState('');
+  const [adding, setAdding] = useState(false);
   const [status, setStatus] = useState<'all' | AgentStatus>('all');
   const [sortKey, setSortKey] = useState<AgentSortKey>('estimated_cost');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -51,12 +53,14 @@ export function AgentsPage() {
         actions={
           <>
             <Button size="sm" icon={RefreshCw} loading={agents.fetching && !agents.loading} onClick={() => void agents.refetch()}>Refresh</Button>
-            <Link to="/connect" className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-bronze px-2.5 text-xs font-medium text-canvas transition-colors hover:bg-bronze-soft">
-              <Plug className="size-3.5" /> Connect an agent
+            <Link to="/connect" className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg">
+              <Plug className="size-3.5" /> How to connect
             </Link>
+            <Button size="sm" variant="primary" icon={Plus} onClick={() => setAdding(true)}>Add a hero</Button>
           </>
         }
       />
+      <AddAgentDialog open={adding} onClose={() => setAdding(false)} onCreated={() => void agents.refetch()} />
       <Card>
         <div className="flex flex-col gap-2 border-b border-line p-3 sm:flex-row sm:items-center">
           <SearchInput value={query} onChange={setQuery} placeholder="Search by name, description or ID" className="sm:w-72" />
