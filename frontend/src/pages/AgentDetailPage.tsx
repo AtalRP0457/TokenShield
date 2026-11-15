@@ -119,7 +119,7 @@ export function AgentDetailPage() {
       </Card>
 
       <Card className="mb-4">
-        <CardHeader title="Peril timeline" description="When TokenShield caught this hero misbehaving. Hover a mark for details." />
+        <CardHeader title="Peril timeline" description="When TokenShield caught this hero misbehaving. Hover a mark for details, or tap it to open." />
         <CardBody>
           {incidents.error ? <ErrorState error={incidents.error} onRetry={incidents.refetch} /> : <PerilTimeline incidents={agentIncidents} now={now} />}
         </CardBody>

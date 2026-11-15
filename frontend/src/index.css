@@ -68,6 +68,28 @@
   opacity: 0.35;
 }
 
+/* ---------- Phones ---------- */
+
+/* Grid items default to min-width:auto, so a wide table or a no-wrap line inside a card
+   stretched the whole page sideways on phones. Let grid items shrink; their own content
+   scrolls or truncates instead. */
+.grid > * {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  /* iPhone Safari zooms into any input whose text is under 16px. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 /* Print / "Save as PDF" of a peril page: drop the app chrome and controls. */
 @media print {
   aside,
