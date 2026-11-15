@@ -37,6 +37,50 @@ def build_payload(inc, agent_name):
     return {"username": "TokenShield", "embeds": [embed]}
 
 
+# One alert at a time, spaced out: Discord webhooks only accept a few messages every few
+# seconds, and "Start all" can create several perils at once.
+_post_lock = threading.Lock()
+_MIN_GAP = 1.5  # seconds between two posts
+_last_post = [0.0]
+
+
+def _retry_after(r) -> float:
+    """Seconds Discord asks us to wait (JSON body, else header), capped so we never hang long."""
+    wait = None
+    try:
+        wait = float(r.json().get("retry_after"))
+    except Exception:
+        try:
+            wait = float(r.headers.get("Retry-After"))
+        except Exception:
+            wait = None
+    return min(max(wait or 2.0, 0.5), 30.0)
+
+
+def _post(payload) -> bool:
+    """POST to the webhook; on 429 wait as Discord asks and retry (up to 4 tries)."""
+    with _post_lock:
+        for attempt in range(4):
+            gap = _MIN_GAP - (time.time() - _last_post[0])
+            if gap > 0:
+                time.sleep(gap)
+            r = requests.post(settings.discord_webhook_url, json=payload, timeout=10)
+            _last_post[0] = time.time()
+            if r.status_code in (200, 204):
+                return True
+            if r.status_code == 429:
+                wait = _retry_after(r)
+                scope = r.headers.get("X-RateLimit-Scope", "unknown")  # user | global | shared
+                print(f"[discord] 429 rate limited (scope={scope}); retrying in {wait:.1f}s "
+                      f"(try {attempt + 1}/4) {r.text[:160]}")
+                time.sleep(wait)
+                continue
+            print(f"[discord] webhook returned {r.status_code}: {r.text[:200]}")
+            return False
+        print("[discord] gave up after 4 tries (still rate limited)")
+        return False
+
+
 def _send(incident_id):
     db = SessionLocal()
     try:
@@ -48,13 +92,9 @@ def _send(incident_id):
         if inc is None or inc.notified:  # duplicate prevention
             return
         agent = db.get(Agent, inc.agent_id)
-        r = requests.post(settings.discord_webhook_url,
-                          json=build_payload(inc, agent.name if agent else "unknown"), timeout=10)
-        if r.status_code in (200, 204):
+        if _post(build_payload(inc, agent.name if agent else "unknown")):
             inc.notified = True
             db.commit()
-        else:
-            print(f"[discord] webhook returned {r.status_code}")
     except Exception as exc:  # never break the app because Discord failed
         print(f"[discord] notification failed: {type(exc).__name__}: {exc}")
     finally:
