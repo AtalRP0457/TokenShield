@@ -17,9 +17,11 @@ Mock mode (`VITE_USE_MOCK=true`, the default) runs entirely in the browser — n
 
 ```env
 VITE_USE_MOCK=false
-VITE_API_BASE_URL=http://localhost:8000   # or the backend laptop's address on the hackathon Wi-Fi
-VITE_POLL_INTERVAL_MS=2500
+VITE_API_BASE_URL=                     # leave empty
+BACKEND_URL=http://localhost:8000      # where the backend runs
 ```
+
+The dashboard calls `/api/...` on its own dev server, and Vite forwards those requests to `BACKEND_URL` (see `vite.config.ts`). The browser never makes a cross-origin request, so CORS can't break the connection, even if you open the dashboard on `127.0.0.1` or another port. To use a backend on another laptop, set `BACKEND_URL=http://<its-address>:8000`.
 
 There is no WebSocket: the live feed and incidents poll every 2–3 s, as the backend contract asks. Restart `npm run dev` after editing `.env`.
 

@@ -53,7 +53,9 @@ export async function request<T>(method: Method, path: string, options: RequestO
     const reason =
       err instanceof DOMException && err.name === 'AbortError'
         ? `Request timed out after ${Math.round(timeoutMs / 1000)}s`
-        : `Cannot reach the TokenShield API at ${config.apiBaseUrl}`;
+        : config.apiBaseUrl
+          ? `Cannot reach the TokenShield API at ${config.apiBaseUrl}`
+          : 'Cannot reach the TokenShield backend through the dev-server proxy. Is it running on port 8000?';
     throw new ApiError(reason, path);
   } finally {
     window.clearTimeout(timer);

@@ -14,7 +14,8 @@ interface SidebarProps {
 export function Sidebar({ open, onClose }: SidebarProps) {
   // Small badge with the number of unresolved incidents next to "Incidents".
   const incidents = useApiQuery(() => api.getIncidents(), [], { refreshMs: 5_000 });
-  const openIncidents = incidents.data?.filter((i) => i.status !== 'resolved').length ?? 0;
+  // Same rule as the backend's active_incidents KPI: only status "open" counts.
+  const openIncidents = incidents.data?.filter((i) => i.status === 'open').length ?? 0;
 
   return (
     <>
