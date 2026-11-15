@@ -35,7 +35,11 @@ export function OraclePage() {
   const seq = useRef(0);
   const bottom = useRef<HTMLDivElement>(null);
 
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), [turns]);
+  useEffect(() => {
+    // Braces matter: newer Chrome returns a Promise from scrollIntoView, and React would
+    // treat any returned value as a cleanup function and crash when you leave the page.
+    if (turns.length > 0) bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [turns]);
 
   const ask = async (question: string) => {
     const q = question.trim();

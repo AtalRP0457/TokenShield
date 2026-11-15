@@ -45,7 +45,10 @@ export function PerilAlerts() {
     window.addEventListener('tokenshield:alert-prefs', onChange);
     return () => window.removeEventListener('tokenshield:alert-prefs', onChange);
   }, []);
-  useEffect(() => onWatchedChange(() => setWatchedState(loadWatched())), []);
+  useEffect(() => {
+    const off = onWatchedChange(() => setWatchedState(loadWatched()));
+    return off;
+  }, []);
 
   const announce = (items: Toast[]) => {
     if (items.length === 0) return;
